@@ -572,8 +572,66 @@ export function initGame(
     state.fireballs = state.fireballs.filter((f: any) => f.alive);
   }
 
+  let musicStep = 0;
+  let nextNoteTime = 0;
+
+  function musicTone(freq: number, duration: number, type: OscillatorType, gainGain: number, slide: number, time: number) {
+    if (!audio || audio.state === "suspended") return;
+    const osc = audio.createOscillator();
+    const g = audio.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, time);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * slide), time + duration);
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(gainGain, time + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    osc.connect(g);
+    g.connect(audio.destination);
+    osc.start(time);
+    osc.stop(time + duration + 0.02);
+  }
+
+  function playMusicStep(step: number, time: number) {
+     const bar = Math.floor(step / 16) % 4;
+     const subStep = step % 16;
+      
+     let chord = [261.63, 329.63, 392.00];
+     let bass = 130.81;
+     
+     if (bar === 1) { chord = [349.23, 440.00, 523.25]; bass = 174.61; }
+     else if (bar === 2) { chord = [392.00, 493.88, 587.33]; bass = 196.00; }
+     else if (bar === 3) { chord = [261.63, 329.63, 392.00]; bass = 130.81; }
+     
+     if (subStep === 0 || subStep === 3 || subStep === 8 || subStep === 11) {
+        musicTone(bass, 0.15, "triangle", 0.05, 1, time);
+     }
+     if (subStep % 2 === 0) {
+        const note = chord[(subStep / 2) % 3] * 2; 
+        musicTone(note, 0.1, "square", 0.015, 1, time);
+     }
+  }
+
+  function scheduleMusic() {
+    if (!audio || audio.state === "suspended") return;
+    const tempo = 125;
+    const stepDuration = (60 / tempo) / 4; 
+    
+    if (nextNoteTime === 0 || nextNoteTime < audio.currentTime) {
+      nextNoteTime = audio.currentTime + 0.05;
+    }
+
+    while (nextNoteTime < audio.currentTime + 0.1) {
+      if (scene === "playing") {
+        playMusicStep(musicStep, nextNoteTime);
+      }
+      nextNoteTime += stepDuration;
+      musicStep = (musicStep + 1) % 64;
+    }
+  }
+
   function update(dt: number) {
     frameTime += dt;
+    scheduleMusic();
     if (scene === "playing") {
       state.time += dt;
       updatePlayer(dt);

@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Ethan the Jumping Boy",
+  "description": "A polished 2D side-scrolling platformer with Mario-like mechanics where Ethan runs, jumps, crouches, and shoots fireballs.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

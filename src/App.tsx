@@ -29,7 +29,7 @@ export default function App() {
       <section className="hero">
         <div>
           <p className="eyebrow">Original browser platformer</p>
-          <h1>Ethan the Jumper</h1>
+          <h1>Ethan the Jumping Boy</h1>
         </div>
         <p className="hint">Move with A/D, Crouch with S. Jump with Space/W. Fireball with F/J. Restart with R.</p>
       </section>
