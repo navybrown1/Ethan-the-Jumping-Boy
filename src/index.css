@@ -90,7 +90,7 @@ canvas {
 .mobile-controls {
   width: min(960px, 100%);
   display: grid;
-  grid-template-columns: 78px 78px 1fr;
+  grid-template-columns: 78px 78px 78px 1fr;
   gap: 16px;
   margin: 24px auto 0;
 }
@@ -113,6 +113,11 @@ canvas {
   background-color: #facc15;
   color: #312e81;
   box-shadow: 0 0 40px rgba(250, 204, 21, 0.5);
+}
+
+.mobile-controls .crouch {
+  background-color: #7c3aed;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.45);
 }
 
 .mobile-controls button:active {

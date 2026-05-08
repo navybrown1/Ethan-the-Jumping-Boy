@@ -10,6 +10,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const btnLeftRef = useRef<HTMLButtonElement>(null);
   const btnRightRef = useRef<HTMLButtonElement>(null);
+  const btnCrouchRef = useRef<HTMLButtonElement>(null);
   const btnJumpRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function App() {
         canvasRef.current,
         btnLeftRef.current,
         btnRightRef.current,
+        btnCrouchRef.current,
         btnJumpRef.current
       );
       return cleanup;
@@ -41,6 +43,7 @@ export default function App() {
       <div className="mobile-controls" aria-hidden="false">
         <button ref={btnLeftRef} id="btn-left" aria-label="Move left">◀</button>
         <button ref={btnRightRef} id="btn-right" aria-label="Move right">▶</button>
+        <button ref={btnCrouchRef} id="btn-crouch" className="crouch" aria-label="Crouch">▼</button>
         <button ref={btnJumpRef} id="btn-jump" className="jump" aria-label="Jump">Jump</button>
       </div>
     </main>

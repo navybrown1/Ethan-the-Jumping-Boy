@@ -6,6 +6,7 @@ export function initGame(
   canvas: HTMLCanvasElement,
   btnLeft: HTMLElement | null,
   btnRight: HTMLElement | null,
+  btnCrouch: HTMLElement | null,
   btnJump: HTMLElement | null
 ) {
   const ctx = canvas.getContext("2d")!;
@@ -796,10 +797,11 @@ export function initGame(
   function drawPlayer() {
     const pl = state.player;
     const sprite = playerSprite();
-    const drawW = 96;
-    const drawH = 104;
+    const crouching = pl.state === "crouch" || pl.state === "crouch_throw";
+    const drawW = crouching ? 92 : 96;
+    const drawH = crouching ? 86 : 104;
     const x = pl.x + pl.w / 2 - drawW / 2;
-    const y = pl.y + pl.h - drawH + 8;
+    const y = pl.y + pl.h - drawH + (crouching ? 18 : 8);
     const flashing = pl.invuln > 0 && Math.floor(frameTime * 18) % 2 === 0;
     ctx.save();
     if (flashing) ctx.globalAlpha = 0.52;
@@ -1016,7 +1018,7 @@ export function initGame(
     }
   }
 
-  function bindMobileButton(btn: HTMLElement | null, prop: "left" | "right" | "jump") {
+  function bindMobileButton(btn: HTMLElement | null, prop: "left" | "right" | "jump" | "crouch") {
     if (!btn) return;
     const down = (e: Event) => {
       e.preventDefault();
@@ -1042,13 +1044,14 @@ export function initGame(
       btn.removeEventListener("pointerup", up);
       btn.removeEventListener("pointercancel", up);
       btn.removeEventListener("pointerleave", up);
-    }
+    };
   }
 
   function syncMobile() {
     keys.left = keys.left || mobileState.left;
     keys.right = keys.right || mobileState.right;
     keys.jump = keys.jump || mobileState.jump;
+    keys.crouch = keys.crouch || mobileState.crouch;
   }
 
   let rafId: number;
@@ -1071,6 +1074,7 @@ export function initGame(
   
   const cleanupLeft = bindMobileButton(btnLeft, "left");
   const cleanupRight = bindMobileButton(btnRight, "right");
+  const cleanupCrouch = bindMobileButton(btnCrouch, "crouch");
   const cleanupJump = bindMobileButton(btnJump, "jump");
 
   Promise.all(Object.entries(assetList).map(([name, src]) => loadImage(name, src)))
@@ -1099,6 +1103,7 @@ export function initGame(
     window.removeEventListener("pointerdown", onPointerDownAudio);
     cleanupLeft && cleanupLeft();
     cleanupRight && cleanupRight();
+    cleanupCrouch && cleanupCrouch();
     cleanupJump && cleanupJump();
   };
 }
