@@ -1,5 +1,7 @@
 import { assetList } from "./gameAssets";
 
+assetList.ethan = `${import.meta.env.BASE_URL}assets/ethan/spritesheet.webp`;
+
 export function initGame(
   canvas: HTMLCanvasElement,
   btnLeft: HTMLElement | null,
@@ -767,35 +769,46 @@ export function initGame(
     }
   }
 
-  function playerFrame() {
+  function playerSprite() {
     const pl = state.player;
-    if (pl.state === "hurt") return 8;
-    if (pl.state === "victory") return 9;
-    if (pl.state === "throw" || pl.state === "crouch_throw") return 11;
-    if (pl.state === "crouch") return 10;
-    if (pl.state === "jump") return 6;
-    if (pl.state === "fall") return 7;
-    if (pl.state === "landing") return 1;
-    if (pl.state === "run") return 2 + (Math.floor(pl.anim) % 4);
-    return Math.floor(pl.anim) % 2;
+    const facingLeft = pl.facing < 0;
+
+    if (pl.state === "run") {
+      return {
+        row: facingLeft ? 2 : 1,
+        frame: Math.floor(pl.anim) % 8,
+        flip: false
+      };
+    }
+
+    if (pl.state === "hurt") return { row: 5, frame: Math.floor(pl.anim) % 8, flip: facingLeft };
+    if (pl.state === "victory") return { row: 3, frame: Math.floor(pl.anim) % 4, flip: facingLeft };
+    if (pl.state === "throw" || pl.state === "crouch_throw") return { row: 7, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "crouch") return { row: 6, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "jump") return { row: 4, frame: Math.min(4, Math.floor(pl.anim) % 5), flip: facingLeft };
+    if (pl.state === "fall") return { row: 4, frame: Math.max(2, Math.floor(pl.anim) % 5), flip: facingLeft };
+    if (pl.state === "landing") return { row: 4, frame: 4, flip: facingLeft };
+    if (pl.state === "review") return { row: 8, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "waiting") return { row: 6, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    return { row: 0, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
   }
 
   function drawPlayer() {
     const pl = state.player;
-    const f = playerFrame();
+    const sprite = playerSprite();
     const drawW = 96;
-    const drawH = 96;
+    const drawH = 104;
     const x = pl.x + pl.w / 2 - drawW / 2;
     const y = pl.y + pl.h - drawH + 8;
     const flashing = pl.invuln > 0 && Math.floor(frameTime * 18) % 2 === 0;
     ctx.save();
     if (flashing) ctx.globalAlpha = 0.52;
-    if (pl.facing < 0) {
+    if (sprite.flip) {
       ctx.translate(pl.x + pl.w / 2, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(images.ethan, f * 96, 0, 96, 96, -drawW / 2, y, drawW, drawH);
+      ctx.drawImage(images.ethan, sprite.frame * 192, sprite.row * 208, 192, 208, -drawW / 2, y, drawW, drawH);
     } else {
-      ctx.drawImage(images.ethan, f * 96, 0, 96, 96, x, y, drawW, drawH);
+      ctx.drawImage(images.ethan, sprite.frame * 192, sprite.row * 208, 192, 208, x, y, drawW, drawH);
     }
     ctx.restore();
   }
