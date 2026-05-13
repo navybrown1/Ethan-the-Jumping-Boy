@@ -43,6 +43,7 @@ export function initGame(
   let frameTime = 0;
   let audio: AudioContext | null = null;
   let mutedBecauseNoGesture = true;
+  let musicTempo = 125;
 
   const state = {
     cameraX: 0,
@@ -55,6 +56,8 @@ export function initGame(
     notices: [] as any[],
     shake: 0,
     levelName: "Rainbow Grove",
+    currentLevel: 1,
+    bgColor: "#81e8ff",
     player: null as any,
     platforms: [] as any[],
     starsList: [] as any[],
@@ -121,10 +124,21 @@ export function initGame(
     star: () => { tone(760, 0.08, "sine", 0.035, 1.34); setTimeout(() => tone(980, 0.08, "sine", 0.025, 1.2), 45); },
     stomp: () => { tone(210, 0.11, "square", 0.035, 0.62); },
     hurt: () => { tone(180, 0.2, "sawtooth", 0.035, 0.45); },
-    win: () => { tone(520, 0.14, "triangle", 0.04, 1.4); setTimeout(() => tone(700, 0.16, "triangle", 0.04, 1.38), 120); setTimeout(() => tone(980, 0.2, "triangle", 0.04, 1.2), 250); }
+    win: () => { tone(520, 0.14, "triangle", 0.04, 1.4); setTimeout(() => tone(700, 0.16, "triangle", 0.04, 1.38), 120); setTimeout(() => tone(980, 0.2, "triangle", 0.04, 1.2), 250); },
+    levelUp: () => {
+      tone(440, 0.1, "triangle", 0.04, 1.2);
+      setTimeout(() => tone(554, 0.1, "triangle", 0.04, 1.2), 100);
+      setTimeout(() => tone(659, 0.1, "triangle", 0.04, 1.2), 200);
+      setTimeout(() => tone(880, 0.25, "triangle", 0.045, 1.1), 310);
+    }
   };
 
-  function makeLevel() {
+  // ─── Level 1: Rainbow Grove ───────────────────────────────────────────────
+  function makeLevel1() {
+    state.levelName = "Rainbow Grove";
+    state.bgColor = "#81e8ff";
+    musicTempo = 125;
+
     const p: any[] = [];
     const add = (x: number, y: number, w: number, h = 64, type = 0) => p.push({ x, y, w, h, type });
 
@@ -171,21 +185,287 @@ export function initGame(
     addStars(4955, 238, 3);
 
     const enemies = [
-      enemy("slime", 610, 406, 500, 790, 78),
-      enemy("mushroom", 1040, 406, 985, 1360, 64),
-      enemy("roller", 1740, 406, 1630, 1990, 120),
-      enemy("bug", 2110, 305, 1900, 2180, 70),
-      enemy("slime", 2410, 406, 2240, 2840, 82),
-      enemy("bug", 3130, 300, 2980, 3500, 82),
+      enemy("slime",    610,  406, 500,  790,  78),
+      enemy("mushroom", 1040, 406, 985,  1360, 64),
+      enemy("roller",   1740, 406, 1630, 1990, 120),
+      enemy("bug",      2110, 305, 1900, 2180, 70),
+      enemy("slime",    2410, 406, 2240, 2840, 82),
+      enemy("bug",      3130, 300, 2980, 3500, 82),
       enemy("mushroom", 3440, 406, 3070, 3610, 72),
-      enemy("roller", 3970, 406, 3810, 4240, 130),
-      enemy("slime", 4520, 406, 4410, 4890, 85),
-      enemy("bug", 4880, 265, 4620, 5120, 90)
+      enemy("roller",   3970, 406, 3810, 4240, 130),
+      enemy("slime",    4520, 406, 4410, 4890, 85),
+      enemy("bug",      4880, 265, 4620, 5120, 90)
     ];
 
     state.platforms = p;
     state.starsList = stars;
     state.enemies = enemies;
+  }
+
+  // ─── Level 2: Sunset Cliffs ───────────────────────────────────────────────
+  // Wider gaps (180-210 px), 12 enemies ~20 % faster, 15 float platforms.
+  function makeLevel2() {
+    state.levelName = "Sunset Cliffs";
+    state.bgColor = "#ff7a3c";
+    musicTempo = 132;
+
+    const p: any[] = [];
+    const add = (x: number, y: number, w: number, h = 64, type = 0) => p.push({ x, y, w, h, type });
+
+    // Ground sections – gaps are 180–210 px wide
+    add(0,    456, 760, 120, 0);   // 0–760
+    add(960,  456, 440, 120, 0);   // 960–1400    gap: 760–960 (200 px)
+    add(1590, 456, 410, 120, 0);   // 1590–2000   gap: 1400–1590 (190 px)
+    add(2200, 456, 640, 120, 0);   // 2200–2840   gap: 2000–2200 (200 px)
+    add(3050, 456, 570, 120, 0);   // 3050–3620   gap: 2840–3050 (210 px)
+    add(3830, 456, 480, 120, 0);   // 3830–4310   gap: 3620–3830 (210 px)
+    add(4520, 456, 780, 120, 0);   // 4520–5300   gap: 4310–4520 (210 px)
+
+    // Floating platforms – every gap has a bridge
+    add(220,  308, 160, 36, 1);
+    add(460,  350, 200, 36, 2);
+    add(740,  300, 240, 36, 1);   // bridges gap 760–960
+    add(1100, 340, 200, 36, 2);
+    add(1380, 285, 240, 36, 1);   // bridges gap 1400–1590
+    add(1720, 335, 220, 36, 2);
+    add(1980, 295, 240, 36, 1);   // bridges gap 2000–2200
+    add(2340, 320, 200, 36, 2);
+    add(2640, 270, 240, 36, 1);
+    add(2820, 340, 240, 36, 2);   // bridges gap 2840–3050
+    add(3200, 295, 240, 36, 1);
+    add(3600, 330, 250, 36, 2);   // bridges gap 3620–3830
+    add(4060, 300, 200, 36, 1);
+    add(4290, 270, 250, 36, 2);   // bridges gap 4310–4520
+    add(4660, 335, 260, 36, 1);
+    add(4940, 300, 180, 36, 2);
+
+    const stars: any[] = [];
+    const addStars = (x: number, y: number, count: number, gap = 54) => {
+      for (let i = 0; i < count; i++) stars.push({ x: x + i * gap, y, w: 34, h: 34, collected: false, bob: Math.random() * Math.PI * 2 });
+    };
+    addStars(230,  250, 3);
+    addStars(470,  293, 3);
+    addStars(755,  243, 4);
+    addStars(1115, 282, 3);
+    addStars(1395, 228, 4);
+    addStars(1730, 278, 3);
+    addStars(1995, 238, 4);
+    addStars(2355, 262, 3);
+    addStars(2655, 212, 4);
+    addStars(2835, 283, 3);
+    addStars(3215, 237, 4);
+    addStars(3615, 272, 4);
+    addStars(4075, 243, 3);
+    addStars(4305, 212, 4);
+    addStars(4675, 277, 3);
+    addStars(4955, 242, 3);
+
+    // 12 enemies, speeds ~20 % higher than level 1
+    const enemies = [
+      enemy("slime",    620,  406, 510,  750,  94),
+      enemy("mushroom", 1050, 406, 970,  1380, 76),
+      enemy("bug",      1280, 308, 970,  1380, 88),
+      enemy("roller",   1700, 406, 1600, 1980, 144),
+      enemy("slime",    2440, 406, 2220, 2820, 98),
+      enemy("mushroom", 2700, 406, 2220, 2820, 88),
+      enemy("bug",      2120, 308, 1920, 2180, 82),
+      enemy("roller",   3200, 406, 3060, 3600, 156),
+      enemy("bug",      3450, 308, 3060, 3610, 96),
+      enemy("slime",    4000, 406, 3840, 4300, 102),
+      enemy("roller",   4660, 406, 4530, 5100, 148),
+      enemy("mushroom", 4880, 406, 4530, 5100, 82)
+    ];
+
+    state.platforms = p;
+    state.starsList = stars;
+    state.enemies = enemies;
+  }
+
+  // ─── Level 3: Crystal Caves ──────────────────────────────────────────────
+  // Gaps 240–265 px, 14 enemies ~40 % faster, more varied platform heights.
+  function makeLevel3() {
+    state.levelName = "Crystal Caves";
+    state.bgColor = "#0b2030";
+    musicTempo = 140;
+
+    const p: any[] = [];
+    const add = (x: number, y: number, w: number, h = 64, type = 0) => p.push({ x, y, w, h, type });
+
+    // Ground sections – gaps 240–265 px
+    add(0,    456, 740, 120, 0);   // 0–740
+    add(990,  456, 410, 120, 0);   // 990–1400    gap: 740–990 (250 px)
+    add(1660, 456, 380, 120, 0);   // 1660–2040   gap: 1400–1660 (260 px)
+    add(2300, 456, 640, 120, 0);   // 2300–2940   gap: 2040–2300 (260 px)
+    add(3200, 456, 540, 120, 0);   // 3200–3740   gap: 2940–3200 (260 px)
+    add(3990, 456, 460, 120, 0);   // 3990–4450   gap: 3740–3990 (250 px)
+    add(4710, 456, 590, 120, 0);   // 4710–5300   gap: 4450–4710 (260 px)
+
+    // Floating platforms – more varied heights; every gap is bridged
+    add(160,  298, 160, 36, 1);
+    add(380,  248, 180, 36, 2);   // higher
+    add(680,  298, 300, 36, 1);   // wide bridge over gap 740–990
+    add(1060, 330, 200, 36, 2);
+    add(1340, 272, 260, 36, 1);   // bridges gap 1400–1660
+    add(1740, 325, 200, 36, 2);
+    add(1960, 258, 200, 36, 1);
+    add(2130, 295, 240, 36, 2);   // bridges gap 2040–2300
+    add(2420, 265, 200, 36, 1);
+    add(2670, 220, 240, 36, 2);   // high platform
+    add(2910, 300, 270, 36, 1);   // bridges gap 2940–3200
+    add(3290, 258, 240, 36, 2);
+    add(3580, 302, 280, 36, 1);   // bridges gap 3740–3990
+    add(3890, 242, 200, 36, 2);
+    add(4100, 292, 200, 36, 1);
+    add(4340, 258, 290, 36, 2);   // bridges gap 4450–4710
+    add(4780, 295, 220, 36, 1);
+    add(5010, 255, 180, 36, 2);
+
+    const stars: any[] = [];
+    const addStars = (x: number, y: number, count: number, gap = 54) => {
+      for (let i = 0; i < count; i++) stars.push({ x: x + i * gap, y, w: 34, h: 34, collected: false, bob: Math.random() * Math.PI * 2 });
+    };
+    addStars(170,  240, 3);
+    addStars(390,  190, 3);
+    addStars(695,  240, 5);
+    addStars(1075, 272, 3);
+    addStars(1355, 214, 4);
+    addStars(1750, 267, 3);
+    addStars(1970, 200, 3);
+    addStars(2145, 237, 4);
+    addStars(2435, 207, 3);
+    addStars(2685, 162, 4);
+    addStars(2925, 242, 4);
+    addStars(3305, 200, 4);
+    addStars(3595, 244, 4);
+    addStars(3905, 184, 3);
+    addStars(4115, 234, 3);
+    addStars(4355, 200, 4);
+    addStars(4795, 237, 3);
+    addStars(5025, 197, 3);
+
+    // 14 enemies, speeds ~40 % higher; bugs fly over most gaps
+    const enemies = [
+      enemy("roller",   590,  406, 390,  730,  160),
+      enemy("bug",      800,  268, 680,  980,  115),
+      enemy("slime",    1060, 406, 1000, 1380, 115),
+      enemy("roller",   1230, 406, 1000, 1380, 186),
+      enemy("bug",      1480, 265, 1380, 1650, 118),
+      enemy("mushroom", 1740, 406, 1670, 2020, 100),
+      enemy("roller",   1900, 406, 1670, 2020, 190),
+      enemy("bug",      2200, 258, 2040, 2290, 122),
+      enemy("slime",    2450, 406, 2310, 2920, 120),
+      enemy("roller",   2720, 406, 2310, 2920, 192),
+      enemy("mushroom", 2880, 406, 2320, 2920, 104),
+      enemy("bug",      3050, 265, 2940, 3190, 128),
+      enemy("roller",   3380, 406, 3210, 3720, 196),
+      enemy("bug",      3700, 265, 3590, 3980, 132)
+    ];
+
+    state.platforms = p;
+    state.starsList = stars;
+    state.enemies = enemies;
+  }
+
+  // ─── Level 4: Storm Summit ────────────────────────────────────────────────
+  // Gaps 290–320 px, 16 enemies ~60 % faster, complex multi-tier platforms.
+  function makeLevel4() {
+    state.levelName = "Storm Summit";
+    state.bgColor = "#0c0c18";
+    musicTempo = 150;
+
+    const p: any[] = [];
+    const add = (x: number, y: number, w: number, h = 64, type = 0) => p.push({ x, y, w, h, type });
+
+    // Ground sections – gaps 290–320 px
+    add(0,    456, 700, 120, 0);   // 0–700
+    add(1010, 456, 380, 120, 0);   // 1010–1390   gap: 700–1010 (310 px)
+    add(1700, 456, 360, 120, 0);   // 1700–2060   gap: 1390–1700 (310 px)
+    add(2370, 456, 600, 120, 0);   // 2370–2970   gap: 2060–2370 (310 px)
+    add(3280, 456, 500, 120, 0);   // 3280–3780   gap: 2970–3280 (310 px)
+    add(4080, 456, 440, 120, 0);   // 4080–4520   gap: 3780–4080 (300 px)
+    add(4830, 456, 470, 120, 0);   // 4830–5300   gap: 4520–4830 (310 px)
+
+    // Floating platforms – multi-tier layout; every gap has a bridge
+    add(140,  310, 160, 36, 1);
+    add(370,  250, 180, 36, 2);   // high tier
+    add(580,  310, 180, 36, 1);   // approaches gap
+    add(790,  265, 250, 36, 2);   // bridges gap 700–1010
+    add(1090, 335, 190, 36, 1);
+    add(1350, 278, 200, 36, 2);   // approaches gap
+    add(1490, 310, 250, 36, 1);   // bridges gap 1390–1700
+    add(1780, 255, 190, 36, 2);
+    add(2010, 295, 180, 36, 1);   // approaches gap
+    add(2140, 265, 270, 36, 2);   // bridges gap 2060–2370
+    add(2450, 250, 200, 36, 1);
+    add(2690, 305, 220, 36, 2);
+    add(2910, 245, 210, 36, 1);   // approaches gap
+    add(3050, 288, 270, 36, 2);   // bridges gap 2970–3280
+    add(3360, 255, 240, 36, 1);
+    add(3650, 305, 220, 36, 2);   // approaches gap
+    add(3870, 260, 250, 36, 1);   // bridges gap 3780–4080
+    add(4160, 300, 190, 36, 2);
+    add(4390, 250, 200, 36, 1);   // approaches gap
+    add(4610, 275, 255, 36, 2);   // bridges gap 4520–4830
+    add(4900, 310, 200, 36, 1);
+    add(5095, 260, 165, 36, 2);
+
+    const stars: any[] = [];
+    const addStars = (x: number, y: number, count: number, gap = 54) => {
+      for (let i = 0; i < count; i++) stars.push({ x: x + i * gap, y, w: 34, h: 34, collected: false, bob: Math.random() * Math.PI * 2 });
+    };
+    addStars(150,  252, 3);
+    addStars(380,  192, 3);
+    addStars(590,  252, 3);
+    addStars(800,  207, 4);
+    addStars(1100, 277, 3);
+    addStars(1360, 220, 3);
+    addStars(1505, 252, 4);
+    addStars(1790, 197, 3);
+    addStars(2020, 237, 3);
+    addStars(2155, 207, 4);
+    addStars(2465, 192, 3);
+    addStars(2705, 247, 3);
+    addStars(2925, 187, 3);
+    addStars(3065, 230, 4);
+    addStars(3375, 197, 3);
+    addStars(3665, 247, 3);
+    addStars(3885, 202, 4);
+    addStars(4175, 242, 3);
+    addStars(4405, 192, 3);
+    addStars(4625, 217, 4);
+    addStars(4915, 252, 3);
+    addStars(5110, 202, 3);
+
+    // 16 enemies – dominated by fast rollers and flying bugs
+    const enemies = [
+      enemy("roller",   520,  406, 320,  690,  148),
+      enemy("bug",      750,  248, 630,  1000, 150),
+      enemy("mushroom", 1040, 406, 1010, 1370, 112),
+      enemy("roller",   1220, 406, 1010, 1370, 225),
+      enemy("bug",      1440, 270, 1380, 1690, 155),
+      enemy("roller",   1790, 406, 1700, 2050, 230),
+      enemy("slime",    1910, 406, 1700, 2050, 140),
+      enemy("bug",      2130, 258, 2060, 2360, 158),
+      enemy("roller",   2480, 406, 2370, 2950, 232),
+      enemy("mushroom", 2760, 406, 2370, 2950, 115),
+      enemy("slime",    2890, 406, 2370, 2950, 145),
+      enemy("bug",      3020, 260, 2970, 3270, 162),
+      enemy("roller",   3380, 406, 3280, 3770, 235),
+      enemy("slime",    3590, 406, 3280, 3770, 148),
+      enemy("bug",      3820, 260, 3780, 4070, 164),
+      enemy("roller",   4910, 406, 4830, 5280, 230)
+    ];
+
+    state.platforms = p;
+    state.starsList = stars;
+    state.enemies = enemies;
+  }
+
+  function makeLevel() {
+    if (state.currentLevel === 1) makeLevel1();
+    else if (state.currentLevel === 2) makeLevel2();
+    else if (state.currentLevel === 3) makeLevel3();
+    else makeLevel4();
   }
 
   function enemy(type: string, x: number, y: number, minX: number, maxX: number, speed: number) {
@@ -215,6 +495,7 @@ export function initGame(
   }
 
   function resetGame(startScene = "title") {
+    state.currentLevel = 1;
     state.cameraX = 0;
     state.targetCameraX = 0;
     state.score = 0;
@@ -251,6 +532,40 @@ export function initGame(
     state.fireballs = [];
     makeLevel();
     scene = startScene;
+  }
+
+  function nextLevel() {
+    if (state.currentLevel >= 4) {
+      scene = "win";
+      sfx.win();
+      return;
+    }
+    state.currentLevel++;
+    state.cameraX = 0;
+    state.targetCameraX = 0;
+    state.time = 0;
+    state.particles = [];
+    state.notices = [];
+    state.shake = 0;
+    state.portal.frame = 0;
+    const pl = state.player;
+    pl.x = playerSpawn.x;
+    pl.y = playerSpawn.y;
+    pl.vx = 0;
+    pl.vy = 0;
+    pl.grounded = false;
+    pl.crouching = false;
+    pl.h = 70;
+    pl.state = "idle";
+    pl.dead = false;
+    pl.invuln = 1.5;
+    pl.hurtTimer = 0;
+    pl.fireballTimer = 0;
+    pl.throwTimer = 0;
+    state.fireballs = [];
+    makeLevel();
+    scene = "playing";
+    sfx.levelUp();
   }
 
   function addParticle(x: number, y: number, opts: any = {}) {
@@ -294,8 +609,12 @@ export function initGame(
   }
 
   function startGame() {
-    if (scene === "title" || scene === "gameover" || scene === "complete") {
+    if (scene === "title" || scene === "gameover") {
       resetGame("playing");
+    } else if (scene === "complete") {
+      nextLevel();
+    } else if (scene === "win") {
+      resetGame("title");
     }
   }
 
@@ -545,9 +864,9 @@ export function initGame(
       fb.x += fb.vx * dt;
       fb.distance += Math.abs(fb.vx * dt);
       fb.frame += dt * 15;
-      
+
       if (fb.distance > 800) { fb.alive = false; continue; }
-      
+
       let hitWall = false;
       for (const platform of state.platforms) {
         if (rectsOverlap(fb, platform)) {
@@ -559,7 +878,7 @@ export function initGame(
          addParticle(fb.x + 16, fb.y + 16, { count: 8, color: "#ff8c00", speed: 80, size: 5, life: 0.3 });
          continue;
       }
-      
+
       for (const e of state.enemies) {
         if (!e.alive) continue;
         if (rectsOverlap(fb, e)) {
@@ -597,28 +916,27 @@ export function initGame(
   function playMusicStep(step: number, time: number) {
      const bar = Math.floor(step / 16) % 4;
      const subStep = step % 16;
-      
+
      let chord = [261.63, 329.63, 392.00];
      let bass = 130.81;
-     
+
      if (bar === 1) { chord = [349.23, 440.00, 523.25]; bass = 174.61; }
      else if (bar === 2) { chord = [392.00, 493.88, 587.33]; bass = 196.00; }
      else if (bar === 3) { chord = [261.63, 329.63, 392.00]; bass = 130.81; }
-     
+
      if (subStep === 0 || subStep === 3 || subStep === 8 || subStep === 11) {
         musicTone(bass, 0.15, "triangle", 0.05, 1, time);
      }
      if (subStep % 2 === 0) {
-        const note = chord[(subStep / 2) % 3] * 2; 
+        const note = chord[(subStep / 2) % 3] * 2;
         musicTone(note, 0.1, "square", 0.015, 1, time);
      }
   }
 
   function scheduleMusic() {
     if (!audio || audio.state === "suspended") return;
-    const tempo = 125;
-    const stepDuration = (60 / tempo) / 4; 
-    
+    const stepDuration = (60 / musicTempo) / 4;
+
     if (nextNoteTime === 0 || nextNoteTime < audio.currentTime) {
       nextNoteTime = audio.currentTime + 0.05;
     }
@@ -680,20 +998,30 @@ export function initGame(
 
   function drawBackground() {
     const bg = images.background;
-    ctx.fillStyle = "#81e8ff";
+    ctx.fillStyle = state.bgColor;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+    // Fade bg image out on darker levels to let the sky colour show
+    const bgAlpha = state.currentLevel === 1 ? 1 :
+                    state.currentLevel === 2 ? 0.55 :
+                    state.currentLevel === 3 ? 0.18 : 0.08;
+    ctx.globalAlpha = bgAlpha;
     const offset = -((state.cameraX * 0.16) % 2200);
     for (let x = offset - 2200; x < VIEW_W + 2200; x += 2200) {
       ctx.drawImage(bg, x, 0, 2200, VIEW_H);
     }
+    ctx.globalAlpha = 1;
 
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = "#ffffff";
-    for (let i = 0; i < 42; i++) {
+    // Background dots – bright stars on dark levels, subtle sparkles on light ones
+    const isDark = state.currentLevel >= 3;
+    ctx.globalAlpha = isDark ? 0.75 : 0.35;
+    ctx.fillStyle = isDark ? "#b8e8ff" : "#ffffff";
+    const dotCount = isDark ? 64 : 42;
+    for (let i = 0; i < dotCount; i++) {
       const x = (i * 173 - state.cameraX * 0.08) % (VIEW_W + 200) - 100;
-      const y = 24 + (i * 47) % 180;
+      const y = 24 + (i * 47) % 200;
       ctx.beginPath();
-      ctx.arc(x, y, 1.2 + (i % 3), 0, Math.PI * 2);
+      ctx.arc(x, y, isDark ? 1.4 + (i % 3) * 0.6 : 1.2 + (i % 3), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -733,7 +1061,7 @@ export function initGame(
       if (star.collected) continue;
       if (star.x + 60 < state.cameraX || star.x - 60 > state.cameraX + VIEW_W) continue;
       const y = star.y + Math.sin(star.bob) * 5;
-      
+
       ctx.drawImage(images.collectibles, frame * 48, 0, 48, 48, star.x - 7, y - 7, 48, 48);
     }
   }
@@ -818,7 +1146,7 @@ export function initGame(
   function drawPortal() {
     const f = Math.floor(state.portal.frame) % 6;
     ctx.drawImage(images.portal, f * 96, 0, 96, 128, state.portal.x - 10, state.portal.y - 8, 96, 128);
-    
+
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.font = "800 18px ui-rounded, system-ui";
     ctx.textAlign = "center";
@@ -895,15 +1223,15 @@ export function initGame(
     for (let i = 0; i < 3; i++) drawHeart(48 + i * 34, 58, i < state.lives);
 
     ctx.fillStyle = "rgba(35,24,64,0.36)";
-    roundRect(ctx, VIEW_W - 210, 16, 192, 54, 18);
+    roundRect(ctx, VIEW_W - 220, 16, 202, 54, 18);
     ctx.fill();
     ctx.fillStyle = "#fff2a9";
     ctx.font = "900 18px ui-rounded, system-ui";
     ctx.textAlign = "right";
-    ctx.fillText(`${state.levelName}`, VIEW_W - 34, 39);
+    ctx.fillText(`Lv ${state.currentLevel} · ${state.levelName}`, VIEW_W - 24, 39);
     ctx.fillStyle = "#fff";
     ctx.font = "800 15px ui-rounded, system-ui";
-    ctx.fillText(`Time ${Math.floor(state.time)}s`, VIEW_W - 34, 60);
+    ctx.fillText(`Time ${Math.floor(state.time)}s`, VIEW_W - 24, 60);
 
     if (mutedBecauseNoGesture && scene !== "loading") {
       ctx.textAlign = "center";
@@ -924,12 +1252,30 @@ export function initGame(
     if (scene === "loading") {
       titleText("Loading Ethan the Jumper", "Preparing stars, slimes, and jump magic...", "Please wait");
     } else if (scene === "title") {
-      titleText("Ethan the Jumper", "A colorful platform adventure with smooth jumps, stars, enemies, and a glowing portal.", "Press Enter or Space to start");
+      titleText("Ethan the Jumper", "Four levels of colorful platforming — collect stars, stomp enemies, reach the portal.", "Press Enter or Space to start");
       drawMiniControls();
     } else if (scene === "gameover") {
       titleText("Game Over", `Final score: ${state.score}. Ethan took a rough landing.`, "Press Enter to try again");
     } else if (scene === "complete") {
-      titleText("Level Complete", `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`, "Press Enter to play again");
+      if (state.currentLevel < 4) {
+        titleText(
+          `Level ${state.currentLevel} Complete!`,
+          `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`,
+          `Press Enter for Level ${state.currentLevel + 1}`
+        );
+      } else {
+        titleText(
+          "Level 4 Complete!",
+          `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`,
+          "Press Enter to see your final score"
+        );
+      }
+    } else if (scene === "win") {
+      titleText(
+        "You Win!",
+        `All 4 levels conquered! Final Score: ${state.score}`,
+        "Press Enter to play again"
+      );
     }
 
     ctx.restore();
@@ -945,21 +1291,21 @@ export function initGame(
     ctx.stroke();
 
     ctx.fillStyle = "#fff2a9";
-    ctx.font = "1000 58px ui-rounded, system-ui";
+    ctx.font = "1000 52px ui-rounded, system-ui";
     ctx.fillText(title, VIEW_W / 2, 195);
     ctx.fillStyle = "#fff";
     ctx.font = "700 19px ui-rounded, system-ui";
-    wrapText(subtitle, VIEW_W / 2, 245, 520, 28);
+    wrapText(subtitle, VIEW_W / 2, 248, 520, 28);
     ctx.fillStyle = "#9df5ff";
     ctx.font = "900 22px ui-rounded, system-ui";
-    ctx.fillText(prompt, VIEW_W / 2, 352);
+    ctx.fillText(prompt, VIEW_W / 2, 355);
   }
 
   function drawMiniControls() {
     ctx.fillStyle = "rgba(255,255,255,0.78)";
     ctx.font = "800 15px ui-rounded, system-ui";
-    ctx.fillText("Move: A/D or arrows · Jump: Space/W/Up · Crouch: S/Down", VIEW_W / 2, 382);
-    ctx.fillText("Fireball: F/J · Restart: R", VIEW_W / 2, 404);
+    ctx.fillText("Move: A/D or arrows · Jump: Space/W/Up · Crouch: S/Down", VIEW_W / 2, 385);
+    ctx.fillText("Fireball: F/J · Restart: R", VIEW_W / 2, 407);
   }
 
   function wrapText(text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
@@ -1025,7 +1371,7 @@ export function initGame(
       initAudio();
       mobileState[prop] = true;
       if (prop === "jump" && !keys.jump) keys.jumpPressed = true;
-      if (scene === "title" || scene === "gameover" || scene === "complete") startGame();
+      if (scene === "title" || scene === "gameover" || scene === "complete" || scene === "win") startGame();
       syncMobile();
     };
     const up = (e: Event) => {
@@ -1038,7 +1384,7 @@ export function initGame(
     btn.addEventListener("pointerup", up);
     btn.addEventListener("pointercancel", up);
     btn.addEventListener("pointerleave", up);
-    
+
     return () => {
       btn.removeEventListener("pointerdown", down);
       btn.removeEventListener("pointerup", up);
@@ -1071,7 +1417,7 @@ export function initGame(
   window.addEventListener("keyup", handleKeyUp, { passive: false });
   const onPointerDownAudio = () => initAudio();
   window.addEventListener("pointerdown", onPointerDownAudio, { once: true });
-  
+
   const cleanupLeft = bindMobileButton(btnLeft, "left");
   const cleanupRight = bindMobileButton(btnRight, "right");
   const cleanupCrouch = bindMobileButton(btnCrouch, "crouch");
