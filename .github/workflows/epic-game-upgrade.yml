@@ -50,3 +50,5 @@ jobs:
           git add src/game.ts src/App.tsx src/index.css README.md
           git commit -m "feat: checkpoints, power-ups, world bosses, and mobile fire"
           git push origin main
+
+# Trigger marker: verified gameplay upgrade pass 1
