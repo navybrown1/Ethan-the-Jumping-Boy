@@ -90,7 +90,7 @@ canvas {
 .mobile-controls {
   width: min(960px, 100%);
   display: grid;
-  grid-template-columns: 78px 78px 78px 1fr;
+  grid-template-columns: 72px 72px 72px 1fr 1fr;
   gap: 16px;
   margin: 24px auto 0;
 }
@@ -120,6 +120,12 @@ canvas {
   box-shadow: 0 0 20px rgba(124, 58, 237, 0.45);
 }
 
+.mobile-controls .fire {
+  background-color: #f97316;
+  color: #fff7ed;
+  box-shadow: 0 0 32px rgba(249, 115, 22, 0.5);
+}
+
 .mobile-controls button:active {
   transform: scale(0.95);
 }
@@ -138,5 +144,15 @@ canvas {
   .hint {
     text-align: center;
     margin-top: 10px;
+  }
+
+  .mobile-controls {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .mobile-controls .jump,
+  .mobile-controls .fire {
+    grid-column: span 1;
   }
 }

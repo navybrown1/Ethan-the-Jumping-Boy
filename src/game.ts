@@ -7,7 +7,8 @@ export function initGame(
   btnLeft: HTMLElement | null,
   btnRight: HTMLElement | null,
   btnCrouch: HTMLElement | null,
-  btnJump: HTMLElement | null
+  btnJump: HTMLElement | null,
+  btnFire: HTMLElement | null
 ) {
   const ctx = canvas.getContext("2d")!;
   const VIEW_W = canvas.width;
@@ -25,6 +26,8 @@ export function initGame(
   const JUMP_CUT = 0.48;
   const COYOTE_TIME = 0.12;
   const JUMP_BUFFER = 0.15;
+  const FULL_HEARTS = 3;
+  const MAX_HEARTS = 5;
 
   const images: Record<string, HTMLImageElement> = {};
   const keys = {
@@ -82,8 +85,11 @@ export function initGame(
     comboTimer: 0,
     portal: { x: 5140, y: 304, w: 76, h: 116, frame: 0 },
     boss: null,
+    guardian: null,
     banner: { title: "", sub: "", timer: 0 },
     selectLevel: 1,
+    checkpointLevel: 1,
+    checkpointScore: 0,
     tilesKey: "tiles1",
     farKey: "far1",
     nearKey: "near1",
@@ -195,6 +201,7 @@ export function initGame(
     state.nearKey = t.near;
     musicTempo = t.tempo;
     musicRoot = t.root;
+    state.skyGrad = null;
   }
 
   // ─── Level 1: Rainbow Grove ───────────────────────────────────────────────
@@ -578,12 +585,40 @@ export function initGame(
     };
   }
 
+  function makeGuardian(level: number) {
+    const defs: any = {
+      1: { name: "GROVE GOLIATH", spriteType: "slime", hp: 6, w: 146, h: 112, speed: 118, color: "#7dff6b", style: "bouncer" },
+      2: { name: "EMBER CRUSHER", spriteType: "roller", hp: 8, w: 142, h: 142, speed: 190, color: "#ff9d3c", style: "charger" },
+      3: { name: "CRYSTAL TITAN", spriteType: "splitter", hp: 10, w: 156, h: 122, speed: 145, color: "#9df5ff", style: "titan" }
+    };
+    const d = defs[level];
+    if (!d) return null;
+    return {
+      ...d,
+      active: false,
+      alive: true,
+      x: level === 2 ? 4760 : 4860,
+      y: 456 - d.h,
+      groundY: 456,
+      minX: level === 2 ? 4680 : 4760,
+      maxX: level === 2 ? 5010 : 5110,
+      vx: d.speed,
+      vy: 0,
+      hopT: 0.9,
+      chargeT: 1.3,
+      hurt: 0,
+      maxHp: d.hp,
+      phase: 1
+    };
+  }
+
   function makeLevel() {
     if (state.currentLevel === 1) makeLevel1();
     else if (state.currentLevel === 2) makeLevel2();
     else if (state.currentLevel === 3) makeLevel3();
     else makeLevel4();
     applyTheme(state.currentLevel);
+    state.guardian = state.currentLevel < 4 ? makeGuardian(state.currentLevel) : null;
   }
 
   function enemy(type: string, x: number, y: number, minX: number, maxX: number, speed: number) {
@@ -622,14 +657,23 @@ export function initGame(
   }
 
   function resetGame(startScene = "title") {
-    if (startScene === "title") { state.selectLevel = 1; }
-    state.currentLevel = state.selectLevel;
+    if (startScene === "title") {
+      state.selectLevel = 1;
+      state.checkpointLevel = 1;
+      state.checkpointScore = 0;
+    } else if (scene === "title") {
+      state.checkpointLevel = state.selectLevel;
+      state.checkpointScore = 0;
+    }
+
+    state.currentLevel = startScene === "playing" ? state.checkpointLevel : state.selectLevel;
+    state.selectLevel = state.currentLevel;
     state.cameraX = 0;
     state.targetCameraX = 0;
-    state.score = 0;
+    state.score = startScene === "playing" ? state.checkpointScore : 0;
     state.stars = 0;
     state.time = 0;
-    state.lives = 3;
+    state.lives = FULL_HEARTS;
     state.particles = [];
     state.notices = [];
     state.shake = 0;
@@ -640,6 +684,7 @@ export function initGame(
     state.wind = { timer: 4, gust: 0, dir: 1 };
     state.nextStrike = 5;
     state.boss = null;
+    state.guardian = null;
     state.player = {
       x: playerSpawn.x,
       y: playerSpawn.y,
@@ -656,6 +701,8 @@ export function initGame(
       invuln: 0,
       invincible: 0,
       firePower: false,
+      superTimer: 0,
+      starRush: 0,
       hurtTimer: 0,
       state: "idle",
       anim: 0,
@@ -673,7 +720,11 @@ export function initGame(
     state.combo = 0;
     state.comboTimer = 0;
     makeLevel();
-    state.banner = { title: `LEVEL ${state.currentLevel}`, sub: state.levelName, timer: 1.8 };
+    state.banner = {
+      title: `LEVEL ${state.currentLevel}`,
+      sub: startScene === "playing" && state.checkpointLevel > 1 ? `${state.levelName} · Checkpoint` : state.levelName,
+      timer: 1.8
+    };
     scene = startScene;
   }
 
@@ -683,14 +734,25 @@ export function initGame(
       sfx.win();
       return;
     }
+
+    state.checkpointScore = state.score;
     state.currentLevel++;
+    state.selectLevel = state.currentLevel;
+    state.checkpointLevel = state.currentLevel;
     state.cameraX = 0;
     state.targetCameraX = 0;
     state.time = 0;
+    state.stars = 0;
+    state.lives = FULL_HEARTS;
     state.particles = [];
     state.notices = [];
     state.shake = 0;
+    state.hitstop = 0;
     state.portal.frame = 0;
+    state.ambient = [];
+    state.ambT = 0;
+    state.wind = { timer: 4, gust: 0, dir: 1 };
+    state.nextStrike = 5;
     const pl = state.player;
     pl.x = playerSpawn.x;
     pl.y = playerSpawn.y;
@@ -707,11 +769,15 @@ export function initGame(
     pl.throwTimer = 0;
     pl.invincible = 0;
     pl.firePower = false;
+    pl.superTimer = 0;
+    pl.starRush = 0;
     pl.stompStreak = 0;
     pl.comboTimer = 0;
     state.fireballs = [];
+    state.boss = null;
+    state.guardian = null;
     makeLevel();
-    state.banner = { title: `LEVEL ${state.currentLevel}`, sub: state.levelName, timer: 1.8 };
+    state.banner = { title: `LEVEL ${state.currentLevel}`, sub: `${state.levelName} · CHECKPOINT SAVED`, timer: 2.2 };
     scene = "playing";
     sfx.levelUp();
   }
@@ -786,7 +852,11 @@ export function initGame(
   }
 
   function startGame() {
-    if (scene === "title" || scene === "gameover") {
+    if (scene === "title") {
+      state.checkpointLevel = state.selectLevel;
+      state.checkpointScore = 0;
+      resetGame("playing");
+    } else if (scene === "gameover") {
       resetGame("playing");
     } else if (scene === "complete") {
       nextLevel();
@@ -829,6 +899,20 @@ export function initGame(
   function hitPlayer(source: any) {
     const pl = state.player;
     if (pl.invuln > 0 || pl.dead || scene !== "playing" || pl.invincible > 0) return;
+
+    if (pl.superTimer > 0) {
+      pl.superTimer = 0;
+      pl.invuln = 1.5;
+      pl.hurtTimer = 0.22;
+      pl.vx = source && center(source).x < center(pl).x ? 240 : -240;
+      pl.vy = -320;
+      state.shake = 0.13;
+      addParticle(pl.x + pl.w * 0.5, pl.y + pl.h * 0.45, { count: 28, color: "#7dff6b", speed: 180, size: 6, life: 0.58 });
+      addNotice("SUPER SHIELD!", pl.x + pl.w / 2, pl.y - 16, "#7dff6b");
+      sfx.power();
+      return;
+    }
+
     state.lives -= 1;
     pl.firePower = false;
     pl.invuln = 1.25;
@@ -847,7 +931,8 @@ export function initGame(
 
   function jump() {
     const pl = state.player;
-    pl.vy = JUMP_V;
+    const jumpBoost = pl.superTimer > 0 ? 1.09 : pl.starRush > 0 ? 1.04 : 1;
+    pl.vy = JUMP_V * jumpBoost;
     pl.grounded = false;
     pl.coyote = 0;
     pl.jumpBuffer = 0;
@@ -869,10 +954,10 @@ export function initGame(
     const y = pl.y + pl.h / 2 - 22;
     const x = pl.facing > 0 ? pl.x + pl.w : pl.x - 30;
     state.fireballs.push({
-      x, y, w: upgraded ? 44 : 32, h: upgraded ? 44 : 32,
-      vx: pl.facing * (upgraded ? 760 : 600),
+      x, y, w: upgraded ? 48 : 32, h: upgraded ? 48 : 32,
+      vx: pl.facing * (upgraded ? 820 : 600),
       facing: pl.facing, alive: true, distance: 0, frame: 0,
-      pierce: upgraded ? 2 : 0
+      pierce: upgraded ? 3 : 0
     });
   }
 
@@ -891,6 +976,8 @@ export function initGame(
     if (pl.coyote > 0) pl.coyote -= dt;
     if (pl.invuln > 0) pl.invuln -= dt;
     if (pl.invincible > 0) pl.invincible -= dt;
+    if (pl.superTimer > 0) pl.superTimer -= dt;
+    if (pl.starRush > 0) pl.starRush -= dt;
     if (pl.hurtTimer > 0) pl.hurtTimer -= dt;
     if (pl.landedTimer > 0) pl.landedTimer -= dt;
     if (pl.comboTimer > 0) pl.comboTimer -= dt;
@@ -923,6 +1010,18 @@ export function initGame(
       currentAccel *= 1.15;
       currentMaxSpeed *= 1.18;
     }
+    if (pl.superTimer > 0) {
+      currentAccel *= 1.12;
+      currentMaxSpeed *= 1.16;
+    }
+    if (pl.starRush > 0) {
+      currentAccel *= 1.18;
+      currentMaxSpeed *= 1.2;
+    }
+    if (pl.invincible > 0) {
+      currentAccel *= 1.25;
+      currentMaxSpeed *= 1.35;
+    }
 
     if (move !== 0) {
       pl.vx += move * currentAccel * dt;
@@ -942,8 +1041,8 @@ export function initGame(
     pl.vy += GRAVITY * dt;
     pl.vy = Math.min(pl.vy, 980);
 
-    if (keys.fireball && pl.fireballTimer <= 0 && !pl.dead && scene === "playing") {
-      pl.fireballTimer = 0.4;
+    if (keys.fireball && pl.firePower && pl.fireballTimer <= 0 && !pl.dead && scene === "playing") {
+      pl.fireballTimer = 0.24;
       pl.throwTimer = 0.2;
       sfx.shoot();
       spawnFireball(pl);
@@ -1178,6 +1277,7 @@ export function initGame(
       for (const e of state.enemies) {
         if (!e.alive) continue;
         if (rectsOverlap(fb, e)) {
+          if (e.type === "splitter") spawnMinis(e);
           e.alive = false;
           const m = mult();
           const gained = 200 * m;
@@ -1189,13 +1289,20 @@ export function initGame(
         }
       }
 
+      const g = state.guardian;
+      if (g && g.active && g.alive && fb.alive && rectsOverlap(fb, g)) {
+        fb.alive = false;
+        damageGuardian(1, fb.x + fb.w / 2, fb.y + fb.h / 2);
+        state.score += 75;
+      }
+
       const b = state.boss;
       if (b && b.active && !b.dying && fb.alive && rectsOverlap(fb, b)) {
         fb.alive = false;
-        b.hp -= 1;
+        b.hp -= 2;
         b.hurt = 0.2;
-        state.score += 50;
-        addNotice("+50", b.x + b.w / 2, b.y, "#ff8c00");
+        state.score += 100;
+        addNotice("FIRE -2", b.x + b.w / 2, b.y, "#ff8c00");
         if (b.hp <= 0) startBossDeath();
       }
     }
@@ -1215,6 +1322,15 @@ export function initGame(
       addNotice("+25", star.x, star.y, "#fff2a9");
       addParticle(star.x + 17, star.y + 17, { count: 16, color: "#fff2a9", speed: 145, size: 4.5, life: 0.45 });
       sfx.star();
+
+      if (state.stars % 10 === 0) {
+        state.lives = Math.min(MAX_HEARTS, state.lives + 1);
+        pl.starRush = Math.max(pl.starRush, 4.5);
+        state.score += 250;
+        state.banner = { title: "10 STAR RUSH!", sub: "Heart restored · Speed boost · +250", timer: 1.8 };
+        addParticle(pl.x + pl.w / 2, pl.y + pl.h / 2, { count: 34, color: "#ffd76a", speed: 210, size: 6, life: 0.7 });
+        sfx.levelUp();
+      }
     }
   }
 
@@ -1226,22 +1342,123 @@ export function initGame(
       const hit = { x: pu.x, y: pu.y + Math.sin(pu.bob) * 6, w: pu.w, h: pu.h };
       if (!rectsOverlap(pl, hit)) continue;
       pu.taken = true;
+
       if (pu.kind === "mushroom") {
-        state.lives = Math.min(5, state.lives + 1);
-        addNotice("+1 UP", pu.x, pu.y, "#7dff6b");
-        addParticle(pu.x + 22, pu.y + 22, { count: 18, color: "#7dff6b", speed: 140, size: 5, life: 0.5 });
+        state.lives = Math.min(MAX_HEARTS, state.lives + 1);
+        pl.superTimer = 12;
+        state.score += 300;
+        state.banner = { title: "SUPER ETHAN!", sub: "Shield · Jump boost · Speed boost · +1 heart", timer: 2.0 };
+        addNotice("SUPER MODE!", pu.x, pu.y, "#7dff6b");
+        addParticle(pu.x + 22, pu.y + 22, { count: 32, color: "#7dff6b", speed: 190, size: 6, life: 0.7 });
         sfx.power();
       } else if (pu.kind === "star") {
-        pl.invincible = 6;
-        addNotice("INVINCIBLE!", pu.x, pu.y, "#9df5ff");
-        addParticle(pu.x + 22, pu.y + 22, { count: 24, color: "#9df5ff", speed: 160, size: 5, life: 0.6 });
+        pl.invincible = 8;
+        state.score += 400;
+        state.banner = { title: "STAR POWER!", sub: "Invincible · Turbo speed · Touch enemies to smash them", timer: 2.0 };
+        addNotice("INVINCIBLE 8s!", pu.x, pu.y, "#9df5ff");
+        addParticle(pu.x + 22, pu.y + 22, { count: 42, color: "#9df5ff", speed: 220, size: 6, life: 0.8 });
         sfx.starPower();
       } else {
         pl.firePower = true;
-        addNotice("FIRE FLOWER!", pu.x, pu.y, "#ff8c3a");
-        addParticle(pu.x + 22, pu.y + 22, { count: 18, color: "#ff8c3a", speed: 140, size: 5, life: 0.5 });
+        state.score += 350;
+        state.banner = { title: "FIRE FLOWER!", sub: "Rapid piercing fireballs unlocked · F / J / FIRE", timer: 2.0 };
+        addNotice("FIRE POWER!", pu.x, pu.y, "#ff8c3a");
+        addParticle(pu.x + 22, pu.y + 22, { count: 34, color: "#ff8c3a", speed: 200, size: 6, life: 0.7 });
         sfx.power();
       }
+    }
+  }
+
+  function damageGuardian(amount: number, x: number, y: number) {
+    const g = state.guardian;
+    if (!g || !g.active || !g.alive || g.hurt > 0) return;
+    g.hp -= amount;
+    g.hurt = 0.2;
+    state.hitstop = 0.06;
+    state.shake = Math.max(state.shake, 0.2);
+    addNotice(`-${amount}`, x, y, g.color);
+    addParticle(x, y, { count: 26, color: g.color, speed: 190, size: 6, life: 0.6 });
+    sfx.bossHurt();
+
+    if (g.hp <= 0) {
+      g.alive = false;
+      state.score += 1200 + state.currentLevel * 300;
+      state.shake = 0.45;
+      state.banner = { title: `${g.name} DEFEATED!`, sub: "Portal unlocked · Boss bonus awarded", timer: 2.4 };
+      addParticle(g.x + g.w / 2, g.y + g.h / 2, { count: 80, color: g.color, speed: 280, size: 8, life: 1.0 });
+      addParticle(g.x + g.w / 2, g.y + g.h / 2, { count: 1, kind: "ring", color: "#fff2a9", size: 85, life: 0.8, speed: 0 });
+      sfx.bossDie();
+    }
+  }
+
+  function updateGuardian(dt: number) {
+    const g = state.guardian;
+    if (!g || !g.alive || state.currentLevel >= 4) return;
+    const pl = state.player;
+
+    if (!g.active) {
+      if (pl.x > 4480) {
+        g.active = true;
+        state.enemies.forEach((e: any) => { if (e.x > 4520) e.alive = false; });
+        state.banner = { title: g.name, sub: `WORLD ${state.currentLevel} BOSS · ${g.maxHp} HP`, timer: 2.2 };
+        state.shake = 0.22;
+        sfx.bossHurt();
+      }
+      return;
+    }
+
+    if (g.hurt > 0) g.hurt -= dt;
+    g.phase = g.hp <= Math.ceil(g.maxHp / 2) ? 2 : 1;
+    const rage = g.phase === 2 ? 1.3 : 1;
+
+    if (g.style === "bouncer" || g.style === "titan") {
+      g.hopT -= dt;
+      if (g.y + g.h >= g.groundY - 1 && g.hopT <= 0) {
+        g.vy = g.style === "titan" ? -610 : -520;
+        g.hopT = g.style === "titan" ? 1.05 : 1.3;
+      }
+      g.vy += GRAVITY * dt;
+      g.y += g.vy * dt;
+      if (g.y + g.h >= g.groundY) {
+        if (g.vy > 500 && g.style === "titan") {
+          state.shake = Math.max(state.shake, 0.25);
+          addParticle(g.x + g.w / 2, g.groundY, { count: 22, color: g.color, speed: 180, size: 6, life: 0.55 });
+        }
+        g.y = g.groundY - g.h;
+        g.vy = 0;
+      }
+    } else {
+      g.y = g.groundY - g.h;
+      g.chargeT -= dt;
+      if (g.chargeT <= 0) {
+        g.vx = Math.sign(g.vx || 1) * g.speed * 2.15;
+        g.chargeT = 1.4;
+        addParticle(g.x + g.w / 2, g.y + g.h, { count: 12, color: g.color, speed: 110, size: 5, life: 0.4 });
+      }
+    }
+
+    const targetSpeed = g.speed * rage;
+    if (Math.abs(g.vx) > targetSpeed * 1.25) g.vx *= Math.pow(0.2, dt);
+    else g.vx = Math.sign(g.vx || 1) * targetSpeed;
+    g.x += g.vx * dt;
+    if (g.x < g.minX || g.x + g.w > g.maxX) {
+      g.x = clamp(g.x, g.minX, g.maxX - g.w);
+      g.vx *= -1;
+    }
+
+    if (!rectsOverlap(pl, g)) return;
+    if (pl.invincible > 0) {
+      damageGuardian(2, g.x + g.w / 2, g.y + 20);
+      pl.vx = -Math.sign(g.vx || 1) * 250;
+      return;
+    }
+
+    const stomp = pl.vy > 90 && pl.y + pl.h - g.y < 42 && pl.y < g.y;
+    if (stomp) {
+      damageGuardian(1, g.x + g.w / 2, g.y + 10);
+      pl.vy = -560;
+    } else {
+      hitPlayer(g);
     }
   }
 
@@ -1449,6 +1666,7 @@ export function initGame(
 
   function updateGoal(dt: number) {
     if (state.currentLevel === 4) return;
+    if (state.guardian && state.guardian.alive) return;
     state.portal.frame = (state.portal.frame + dt * 8) % 6;
     const goal = { x: state.portal.x + 14, y: state.portal.y + 10, w: 48, h: 96 };
     if (rectsOverlap(state.player, goal) && scene === "playing") {
@@ -1553,6 +1771,7 @@ export function initGame(
       updateStars(dt);
       updatePowerups(dt);
       updateHazards(dt);
+      updateGuardian(dt);
       updateBoss(dt);
       updateGoal(dt);
       updateCamera(dt);
@@ -1580,6 +1799,7 @@ export function initGame(
     drawStars();
     drawPowerups();
     drawEnemies();
+    drawGuardian();
     drawBoss();
     drawFireballs();
     drawPortal();
@@ -1720,6 +1940,11 @@ export function initGame(
       ctx.globalAlpha = 1;
       ctx.drawImage(images.powerups, cols[pu.kind] * 48, 0, 48, 48, -22, -22, 44, 44);
       ctx.restore();
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.font = "900 11px ui-rounded, system-ui";
+      ctx.textAlign = "center";
+      const label = pu.kind === "mushroom" ? "SUPER" : pu.kind === "star" ? "8s STAR" : "FIRE";
+      ctx.fillText(label, pu.x + pu.w / 2, y + 58);
     }
   }
 
@@ -1745,6 +1970,32 @@ export function initGame(
       }
       ctx.restore();
     }
+  }
+
+  function drawGuardian() {
+    const g = state.guardian;
+    if (!g || !g.active || !g.alive) return;
+    const rowMap: Record<string, number> = { slime: 0, mushroom: 1, bug: 2, roller: 3, spike: 4, hopper: 5, diver: 6, splitter: 7 };
+    const row = rowMap[g.spriteType] || 0;
+    const frame = Math.floor(frameTime * (g.phase === 2 ? 13 : 9)) % 4;
+    ctx.save();
+    if (g.hurt > 0 && Math.floor(frameTime * 24) % 2 === 0) ctx.globalAlpha = 0.42;
+    const glow = 0.14 + Math.sin(frameTime * 6) * 0.05;
+    ctx.globalAlpha *= 1;
+    ctx.fillStyle = g.color;
+    ctx.globalAlpha = glow;
+    ctx.beginPath();
+    ctx.ellipse(g.x + g.w / 2, g.y + g.h / 2, g.w * 0.62, g.h * 0.64, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = g.hurt > 0 && Math.floor(frameTime * 24) % 2 === 0 ? 0.48 : 1;
+    if (g.vx < 0) {
+      ctx.translate(g.x + g.w / 2, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(images.enemies, frame * 80, row * 80, 80, 80, -g.w / 2 - 12, g.y - 14, g.w + 24, g.h + 28);
+    } else {
+      ctx.drawImage(images.enemies, frame * 80, row * 80, 80, 80, g.x - 12, g.y - 14, g.w + 24, g.h + 28);
+    }
+    ctx.restore();
   }
 
   function drawBoss() {
@@ -1786,10 +2037,11 @@ export function initGame(
     const f = Math.floor(state.portal.frame) % 6;
     ctx.drawImage(images.portal, f * 96, 0, 96, 128, state.portal.x - 10, state.portal.y - 8, 96, 128);
 
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.font = "800 18px ui-rounded, system-ui";
+    const locked = !!(state.guardian && state.guardian.alive);
+    ctx.fillStyle = locked ? "#ffb1c2" : "rgba(255,255,255,0.72)";
+    ctx.font = "900 18px ui-rounded, system-ui";
     ctx.textAlign = "center";
-    ctx.fillText("Finish", state.portal.x + 38, state.portal.y - 14);
+    ctx.fillText(locked ? "BOSS LOCKED" : "Finish", state.portal.x + 38, state.portal.y - 14);
   }
 
   function drawLightning() {
@@ -1893,6 +2145,22 @@ export function initGame(
     const y = pl.y + pl.h - drawH + (crouching ? 18 : 8);
     const flashing = pl.invuln > 0 && Math.floor(frameTime * 18) % 2 === 0;
     ctx.save();
+    if (pl.superTimer > 0) {
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = "#7dff6b";
+      ctx.beginPath();
+      ctx.arc(pl.x + pl.w / 2, pl.y + pl.h / 2, 48 + Math.sin(frameTime * 7) * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (pl.firePower) {
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#ff8c3a";
+      ctx.beginPath();
+      ctx.arc(pl.x + pl.w / 2, pl.y + pl.h / 2, 44 + Math.sin(frameTime * 9) * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     if (pl.invincible > 0) {
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = "#9df5ff";
@@ -2025,20 +2293,41 @@ export function initGame(
       ctx.restore();
     }
 
+    const g = state.guardian;
     const b = state.boss;
-    if (b && b.active && !b.dying) {
-      const bw = 300;
-      ctx.fillStyle = "rgba(35,24,64,0.5)";
+    const activeBoss = g && g.active && g.alive ? g : b && b.active && !b.dying ? b : null;
+    if (activeBoss) {
+      const bw = 320;
+      ctx.fillStyle = "rgba(35,24,64,0.62)";
       roundRect(ctx, VIEW_W / 2 - bw / 2, 14, bw, 20, 10);
       ctx.fill();
-      const pct = clamp(b.hp / b.maxHp, 0, 1);
-      ctx.fillStyle = "#ff4269";
+      const pct = clamp(activeBoss.hp / activeBoss.maxHp, 0, 1);
+      ctx.fillStyle = activeBoss.color || "#ff4269";
       roundRect(ctx, VIEW_W / 2 - bw / 2 + 2, 16, (bw - 4) * pct, 16, 8);
       ctx.fill();
       ctx.fillStyle = "#fff";
       ctx.font = "900 13px ui-rounded, system-ui";
       ctx.textAlign = "center";
-      ctx.fillText("KING ROLLER", VIEW_W / 2, 46);
+      ctx.fillText(activeBoss.name || "KING ROLLER", VIEW_W / 2, 46);
+    }
+
+    if (pl) {
+      const badges: { text: string; color: string }[] = [];
+      if (pl.superTimer > 0) badges.push({ text: `SUPER ${Math.ceil(pl.superTimer)}s`, color: "#7dff6b" });
+      if (pl.invincible > 0) badges.push({ text: `STAR ${Math.ceil(pl.invincible)}s`, color: "#9df5ff" });
+      if (pl.starRush > 0) badges.push({ text: `RUSH ${Math.ceil(pl.starRush)}s`, color: "#ffd76a" });
+      if (pl.firePower) badges.push({ text: "FIRE READY", color: "#ff9d3c" });
+      let bx = VIEW_W / 2 - (badges.length * 94) / 2;
+      for (const badge of badges) {
+        ctx.fillStyle = "rgba(18,9,42,0.68)";
+        roundRect(ctx, bx, 58, 88, 25, 12);
+        ctx.fill();
+        ctx.fillStyle = badge.color;
+        ctx.font = "900 11px ui-rounded, system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText(badge.text, bx + 44, 75);
+        bx += 94;
+      }
     }
 
     if (mutedBecauseNoGesture && scene !== "loading") {
@@ -2087,7 +2376,7 @@ export function initGame(
       drawLevelSelect();
       drawMiniControls();
     } else if (scene === "gameover") {
-      titleText("Game Over", `Final score: ${state.score}. Ethan took a rough landing.`, "Press Enter to try again");
+      titleText("Game Over", `Checkpoint: Level ${state.checkpointLevel} · Score banked: ${state.checkpointScore}.`, `Press Enter to restart Level ${state.checkpointLevel} with full hearts`);
     } else if (scene === "complete") {
       const r = computeRating();
       const starsText = "★".repeat(r) + "☆".repeat(3 - r);
@@ -2252,7 +2541,7 @@ export function initGame(
     }
   }
 
-  function bindMobileButton(btn: HTMLElement | null, prop: "left" | "right" | "jump" | "crouch") {
+  function bindMobileButton(btn: HTMLElement | null, prop: "left" | "right" | "jump" | "crouch" | "fireball") {
     if (!btn) return;
     const down = (e: Event) => {
       e.preventDefault();
@@ -2266,6 +2555,11 @@ export function initGame(
       e.preventDefault();
       if (prop === "jump" && keys.jump) keys.jumpReleased = true;
       mobileState[prop] = false;
+      if (prop === "left") keys.left = false;
+      if (prop === "right") keys.right = false;
+      if (prop === "jump") keys.jump = false;
+      if (prop === "crouch") keys.crouch = false;
+      if (prop === "fireball") keys.fireball = false;
       syncMobile();
     };
     btn.addEventListener("pointerdown", down);
@@ -2286,6 +2580,7 @@ export function initGame(
     keys.right = keys.right || mobileState.right;
     keys.jump = keys.jump || mobileState.jump;
     keys.crouch = keys.crouch || mobileState.crouch;
+    keys.fireball = keys.fireball || mobileState.fireball;
   }
 
   let rafId: number;
@@ -2310,6 +2605,7 @@ export function initGame(
   const cleanupRight = bindMobileButton(btnRight, "right");
   const cleanupCrouch = bindMobileButton(btnCrouch, "crouch");
   const cleanupJump = bindMobileButton(btnJump, "jump");
+  const cleanupFire = bindMobileButton(btnFire, "fireball");
 
   Promise.all(Object.entries(assetList).map(([name, src]) => loadImage(name, src)))
     .then(entries => {
@@ -2330,7 +2626,7 @@ export function initGame(
     });
 
   if (import.meta.env.DEV) {
-    (window as any).__ethan = { state, resetGame, nextLevel };
+    (window as any).__ethan = { state, resetGame, nextLevel, damageGuardian };
   }
 
   return () => {
@@ -2343,6 +2639,7 @@ export function initGame(
     cleanupRight && cleanupRight();
     cleanupCrouch && cleanupCrouch();
     cleanupJump && cleanupJump();
+    cleanupFire && cleanupFire();
   };
 
 }

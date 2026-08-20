@@ -1,20 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Ethan the Jumping Boy
 
-# Run and deploy your AI Studio app
+A browser platformer built around Ethan, four themed worlds, collectible stars, power-ups, hazards, bosses, and persistent level progression.
 
-This contains everything you need to run your app locally.
+## What is in the game
 
-View your app in AI Studio: https://ai.studio/apps/ccac0560-6fd5-4070-adbe-410ac0226b56
+- Four worlds: Rainbow Grove, Sunset Cliffs, Crystal Caves, and Storm Summit
+- Level checkpoints: clearing a world banks the score and makes the next world the restart point
+- Every fresh level starts with full hearts
+- Three world guardian bosses plus the final King Roller boss
+- Mushroom: Super Ethan shield, movement boost, jump boost, and a heart
+- Star Power: temporary invincibility and turbo speed
+- Fire Flower: unlocks rapid piercing fireballs
+- Every 10 collectible stars triggers Star Rush, restores a heart, and awards a score bonus
+- Keyboard and touch controls, including a mobile Fire button
+- Local progress saving for unlocked levels, ratings, and best score
 
-## Run Locally
+## Controls
 
-**Prerequisites:**  Node.js
+- Move: A / D or arrow keys
+- Jump: W / Up / Space
+- Crouch: S / Down
+- Fire after collecting a Fire Flower: F / J
+- Restart current checkpoint: R
+- Start or continue: Enter
 
+## Run locally
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev
+```
+
+## Quality checks
+
+```bash
+npm run lint
+npm run build
+```
