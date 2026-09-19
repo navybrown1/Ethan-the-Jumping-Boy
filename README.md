@@ -22,7 +22,8 @@ A browser platformer built around Ethan, four themed worlds, collectible stars, 
 - Crouch: S / Down
 - Fire after collecting a Fire Flower: F / J
 - Restart current checkpoint: R
-- Start or continue: Enter
+- Pause: P or Esc (auto-pauses when the tab loses focus)
+- Mute: M (setting is remembered)
 
 ## Run locally
 

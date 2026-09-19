@@ -29,13 +29,13 @@ export default function App() {
   }, []);
 
   return (
-    <main className="shell" aria-label="Ethan the Jumper game">
+    <main className="shell" aria-label="Ethan the Jumping Boy game">
       <section className="hero">
         <div>
           <p className="eyebrow">Original browser platformer</p>
           <h1>Ethan the Jumping Boy</h1>
         </div>
-        <p className="hint">Move with A/D, crouch with S, jump with Space/W. Grab a Fire Flower, then shoot with F/J or FIRE. R restarts your current checkpoint.</p>
+        <p className="hint">Move with A/D, crouch with S, jump with Space/W. Grab a Fire Flower, then shoot with F/J or FIRE. R restarts your current checkpoint. P pauses, M toggles sound.</p>
       </section>
 
       <div className="game-wrap">
