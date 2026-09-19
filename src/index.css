@@ -12,6 +12,8 @@ body {
   color: #fff;
   font-family: ui-sans-serif, system-ui, sans-serif;
   overflow-x: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .shell {
@@ -76,6 +78,10 @@ h1 {
   align-items: center;
   justify-content: center;
   box-shadow: none;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 canvas {
@@ -128,6 +134,29 @@ canvas {
 
 .mobile-controls button:active {
   transform: scale(0.95);
+}
+
+.mobile-controls button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Respect reduced-motion users: no decorative scaling or glows. */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-controls button {
+    transition: none;
+  }
+
+  .mobile-controls button:active {
+    transform: none;
+  }
+}
+
+/* Touch controls only make sense on touch devices; keyboard users get a cleaner page. */
+@media (pointer: fine) {
+  .mobile-controls {
+    display: none;
+  }
 }
 
 @media (max-width: 760px) {

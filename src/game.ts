@@ -1,4 +1,21 @@
 import { assetList } from "./gameAssets";
+import {
+  clamp,
+  lerp,
+  rectsOverlap,
+  sanitizeProgress,
+  sanitizeSettings,
+  computeRating as computeRatingPure,
+  canStomp,
+  comboMultiplier,
+  levelTimeBonus,
+  STOMP_BOUNCE_VY,
+  GUARDIAN_STOMP_BOUNCE_VY,
+  BOSS_STOMP_BOUNCE_VY,
+  PLAYER_TERMINAL_VY,
+  MAX_PARTICLES,
+  type ProgressData,
+} from "./logic";
 
 assetList.ethan = `${import.meta.env.BASE_URL}assets/ethan/spritesheet.webp`;
 
@@ -49,6 +66,29 @@ export function initGame(
   let musicTempo = 125;
   let musicRoot = 1;
 
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const SETTINGS_KEY = "ethan-deluxe-settings-v1";
+  function loadSettings(): { muted: boolean } {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) return sanitizeSettings(JSON.parse(raw));
+    } catch (e) { /* ignore */ }
+    return { muted: false };
+  }
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ }
+  }
+  const settings = loadSettings();
+  function toggleMute() {
+    settings.muted = !settings.muted;
+    saveSettings();
+    addNotice(settings.muted ? "Sound off (M)" : "Sound on (M)", 480, 120, "#9df5ff");
+  }
+
   const THEMES: any = {
     1: { name: "Rainbow Grove", sky: "#7cd8f5", skyLow: "#eafcff", far: "far1", near: "near1", tiles: "tiles1", particles: "petal", tempo: 125, root: 1 },
     2: { name: "Sunset Cliffs", sky: "#ff9a4d", skyLow: "#ffd9a0", far: "far2", near: "near2", tiles: "tiles2", particles: "ember", tempo: 132, root: 0.84 },
@@ -59,6 +99,8 @@ export function initGame(
   const state: any = {
     cameraX: 0,
     targetCameraX: 0,
+    paused: false,
+    runToken: 0,
     score: 0,
     stars: 0,
     time: 0,
@@ -105,16 +147,14 @@ export function initGame(
     } catch (e) { /* ignore */ }
     return null;
   }
-  const prog = loadProgress() || { unlocked: 1, stars: [0, 0, 0, 0], bestScore: 0 };
+  const prog: ProgressData = sanitizeProgress(loadProgress());
 
   function saveProgress() {
     try { localStorage.setItem("ethan-deluxe-v1", JSON.stringify(prog)); } catch (e) { /* ignore */ }
   }
 
   function computeRating() {
-    const total = state.starsList.length || 1;
-    const pct = state.stars / total;
-    return pct >= 0.8 ? 3 : pct >= 0.5 ? 2 : 1;
+    return computeRatingPure(state.stars, state.starsList.length, 0, state.time);
   }
 
   function loadImage(name: string, src: string): Promise<[string, HTMLImageElement]> {
@@ -126,17 +166,7 @@ export function initGame(
     });
   }
 
-  function clamp(v: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function lerp(a: number, b: number, t: number) {
-    return a + (b - a) * t;
-  }
-
-  function rectsOverlap(a: any, b: any) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-  }
+  // clamp, lerp, rectsOverlap live in ./logic so they can be unit tested.
 
   function center(rect: any) {
     return { x: rect.x + rect.w * 0.5, y: rect.y + rect.h * 0.5 };
@@ -151,7 +181,7 @@ export function initGame(
   }
 
   function tone(freq: number, duration: number, type: OscillatorType = "sine", gain = 0.035, slide = 1) {
-    if (!audio || audio.state === "suspended") return;
+    if (!audio || audio.state === "suspended" || settings.muted) return;
     const now = audio.currentTime;
     const osc = audio.createOscillator();
     const g = audio.createGain();
@@ -495,7 +525,7 @@ export function initGame(
   }
 
   // ─── Level 4: Storm Summit ────────────────────────────────────────────────
-  // Wind gusts, lightning strikes, lava pools — and the King Roller boss arena.
+  // Wind gusts, lightning strikes, lava pools, and the King Roller boss arena.
   function makeLevel4() {
     const p: any[] = [];
     const add = (x: number, y: number, w: number, h = 64, type = 0, opts: any = {}) => {
@@ -670,6 +700,10 @@ export function initGame(
     state.selectLevel = state.currentLevel;
     state.cameraX = 0;
     state.targetCameraX = 0;
+    state.paused = false;
+    state.runToken = (state.runToken || 0) + 1;
+    musicStep = 0;
+    nextNoteTime = 0;
     state.score = startScene === "playing" ? state.checkpointScore : 0;
     state.stars = 0;
     state.time = 0;
@@ -706,6 +740,7 @@ export function initGame(
       hurtTimer: 0,
       state: "idle",
       anim: 0,
+      skidTimer: 0,
       landedTimer: 0,
       dead: false,
       crouching: false,
@@ -714,17 +749,18 @@ export function initGame(
       stompStreak: 0,
       comboTimer: 0,
       standingPlatform: null,
-      trailT: 0
+      trailT: 0,
+      squash: 0
     };
     state.fireballs = [];
-    state.combo = 0;
-    state.comboTimer = 0;
     makeLevel();
-    state.banner = {
+    // Only show the level banner when actually entering gameplay; on the
+    // title scene it would render faintly behind the menu cards.
+    state.banner = startScene === "playing" ? {
       title: `LEVEL ${state.currentLevel}`,
-      sub: startScene === "playing" && state.checkpointLevel > 1 ? `${state.levelName} · Checkpoint` : state.levelName,
+      sub: state.checkpointLevel > 1 ? `${state.levelName} · Checkpoint` : state.levelName,
       timer: 1.8
-    };
+    } : { title: "", sub: "", timer: 0 };
     scene = startScene;
   }
 
@@ -783,7 +819,12 @@ export function initGame(
   }
 
   function addParticle(x: number, y: number, opts: any = {}) {
-    const count = opts.count || 1;
+    // Reduced motion: keep only small, readable bursts and drop ambient dust.
+    let count = opts.count || 1;
+    if (reducedMotion) count = Math.min(count, 6);
+    if (state.particles.length >= MAX_PARTICLES) {
+      state.particles.splice(0, state.particles.length - MAX_PARTICLES + count);
+    }
     for (let i = 0; i < count; i++) {
       const a = (opts.angle ?? Math.random() * Math.PI * 2) + (Math.random() - 0.5) * (opts.spread ?? Math.PI);
       const speed = (opts.speed ?? 110) * (0.55 + Math.random() * 0.9);
@@ -831,6 +872,7 @@ export function initGame(
   }
 
   function spawnAmbient(dt: number) {
+    if (reducedMotion) return;
     const kind = THEMES[state.currentLevel].particles;
     state.ambT -= dt;
     if (state.ambT > 0) return;
@@ -867,7 +909,7 @@ export function initGame(
 
   function mult() {
     const pl = state.player;
-    return Math.min(5, 1 + Math.floor(pl.stompStreak / 2));
+    return comboMultiplier(pl.stompStreak);
   }
 
   function killEnemy(e: any, pts: number) {
@@ -925,7 +967,8 @@ export function initGame(
     sfx.hurt();
     if (state.lives <= 0) {
       pl.dead = true;
-      setTimeout(() => { if (scene === "playing") scene = "gameover"; }, 450);
+      const tok = state.runToken;
+      setTimeout(() => { if (state.runToken === tok && scene === "playing") scene = "gameover"; }, 450);
     }
   }
 
@@ -937,6 +980,7 @@ export function initGame(
     pl.coyote = 0;
     pl.jumpBuffer = 0;
     pl.jumpHold = 0.18;
+    pl.squash = -1;
     addParticle(pl.x + pl.w * 0.5, pl.y + pl.h, { count: 10, color: "#e9d8b8", angle: Math.PI / 2, spread: 1.8, speed: 80, size: 5, gravity: 240, life: 0.35 });
     sfx.jump();
   }
@@ -964,6 +1008,7 @@ export function initGame(
   function updatePlayer(dt: number) {
     const pl = state.player;
     pl.wasGrounded = pl.grounded;
+    const wasOnIce = !!pl.standingPlatform && pl.standingPlatform.type === 2;
     pl.grounded = false;
     pl.standingPlatform = null;
 
@@ -980,6 +1025,11 @@ export function initGame(
     if (pl.starRush > 0) pl.starRush -= dt;
     if (pl.hurtTimer > 0) pl.hurtTimer -= dt;
     if (pl.landedTimer > 0) pl.landedTimer -= dt;
+    if (pl.skidTimer > 0) pl.skidTimer -= dt;
+    if (pl.squash !== 0) {
+      const sqStep = 6 * dt;
+      pl.squash = Math.abs(pl.squash) <= sqStep ? 0 : pl.squash - Math.sign(pl.squash) * sqStep;
+    }
     if (pl.comboTimer > 0) pl.comboTimer -= dt;
     else pl.stompStreak = 0;
 
@@ -997,10 +1047,11 @@ export function initGame(
     }
 
     let move = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const facingBefore = pl.facing;
 
     let currentAccel = ACCEL;
     let currentMaxSpeed = MAX_SPEED;
-    const onIce = pl.standingPlatform && pl.standingPlatform.type === 2;
+    const onIce = wasOnIce;
 
     if (pl.crouching) {
       currentAccel *= 0.5;
@@ -1025,6 +1076,11 @@ export function initGame(
 
     if (move !== 0) {
       pl.vx += move * currentAccel * dt;
+      // Skid: hard reversal while carrying speed on the ground.
+      if (pl.wasGrounded && move !== facingBefore && Math.abs(pl.vx) > 170 && pl.skidTimer <= 0) {
+        pl.skidTimer = 0.16;
+        addParticle(pl.x + pl.w * 0.5, pl.y + pl.h, { count: 7, color: "#ddc5a6", angle: Math.PI / 2, spread: 1.6, speed: 90, size: 4, gravity: 320, life: 0.32 });
+      }
       pl.facing = move;
     } else {
       let decel = pl.wasGrounded ? GROUND_DECEL : AIR_DECEL;
@@ -1039,7 +1095,7 @@ export function initGame(
 
     pl.vx = clamp(pl.vx, -currentMaxSpeed, currentMaxSpeed);
     pl.vy += GRAVITY * dt;
-    pl.vy = Math.min(pl.vy, 980);
+    pl.vy = Math.min(pl.vy, PLAYER_TERMINAL_VY);
 
     if (keys.fireball && pl.firePower && pl.fireballTimer <= 0 && !pl.dead && scene === "playing") {
       pl.fireballTimer = 0.24;
@@ -1071,6 +1127,7 @@ export function initGame(
 
     if (!pl.wasGrounded && pl.grounded) {
       pl.landedTimer = 0.1;
+      pl.squash = 1;
       addParticle(pl.x + pl.w * 0.5, pl.y + pl.h, { count: 12, color: "#ddc5a6", angle: Math.PI / 2, spread: 2.4, speed: 90, size: 5, gravity: 300, life: 0.38 });
     }
 
@@ -1083,7 +1140,7 @@ export function initGame(
       pl.vy = 0;
     }
 
-    if (pl.invincible > 0) {
+    if (pl.invincible > 0 && !reducedMotion) {
       pl.trailT -= dt;
       if (pl.trailT <= 0) {
         pl.trailT = 0.04;
@@ -1098,10 +1155,11 @@ export function initGame(
     else if (!pl.grounded && pl.vy < 0) pl.state = "jump";
     else if (!pl.grounded && pl.vy >= 0) pl.state = "fall";
     else if (pl.landedTimer > 0) pl.state = "landing";
+    else if (pl.skidTimer > 0) pl.state = "skid";
     else if (Math.abs(pl.vx) > 18) pl.state = "run";
     else pl.state = "idle";
 
-    pl.anim += dt * (pl.state === "run" ? 13 : 7);
+    pl.anim += dt * (pl.state === "run" || pl.state === "skid" ? 13 : 7);
   }
 
   function moveAndCollide(pl: any, dt: number) {
@@ -1240,11 +1298,11 @@ export function initGame(
       }
       const plBottom = pl.y + pl.h;
       const enemyTop = e.y;
-      const stomp = pl.vy > 80 && plBottom - enemyTop < 30 && pl.y < e.y;
+      const stomp = canStomp(pl.vy, plBottom, pl.y, enemyTop, e.y);
       if (stomp && e.type !== "spike") {
         if (e.type === "splitter") spawnMinis(e);
         killEnemy(e, 150);
-        pl.vy = -450;
+        pl.vy = STOMP_BOUNCE_VY;
         state.hitstop = 0.06;
         state.shake = Math.max(state.shake, 0.12);
       } else {
@@ -1456,7 +1514,7 @@ export function initGame(
     const stomp = pl.vy > 90 && pl.y + pl.h - g.y < 42 && pl.y < g.y;
     if (stomp) {
       damageGuardian(1, g.x + g.w / 2, g.y + 10);
-      pl.vy = -560;
+      pl.vy = GUARDIAN_STOMP_BOUNCE_VY;
     } else {
       hitPlayer(g);
     }
@@ -1542,8 +1600,10 @@ export function initGame(
     sfx.bossDie();
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
+    const tok = state.runToken;
     for (let i = 0; i < 3; i++) {
       setTimeout(() => {
+        if (state.runToken !== tok || scene !== "playing") return;
         addParticle(cx, cy, { count: 40, color: ["#ffb12b", "#ff6b3a", "#fff2a9"][i % 3], speed: 260, size: 7, life: 0.7 });
         addParticle(cx, cy, { count: 1, kind: "ring", color: "#ffd76a", size: 60, life: 0.5, speed: 0 });
       }, i * 220);
@@ -1591,19 +1651,25 @@ export function initGame(
       b.y = 456 - b.h;
       b.vx = 0;
       b.t -= dt;
-      if (b.state === "idle" && b.t <= 0) {
-        const r = Math.random();
-        const choices = b.phase === 1 ? [0.75, 0.25, 0] : b.phase === 2 ? [0.5, 0.3, 0.2] : [0.4, 0.3, 0.3];
-        if (r < choices[0]) {
-          b.state = "charge";
-          b.t = 0.5;
-          b.dir = state.player.x + state.player.w / 2 < b.x + b.w / 2 ? -1 : 1;
-        } else if (r < choices[0] + choices[1]) {
-          b.state = "summon";
-          b.t = 0.6;
-        } else {
-          b.state = "slam";
-          b.vy = -780;
+      if (b.t <= 0) {
+        if (b.state === "stunned") {
+          // Recover from the wall-hit stun and resume the fight.
+          b.state = "idle";
+          b.t = 0.9 + Math.random() * 0.7;
+        } else if (b.state === "idle") {
+          const r = Math.random();
+          const choices = b.phase === 1 ? [0.75, 0.25, 0] : b.phase === 2 ? [0.5, 0.3, 0.2] : [0.4, 0.3, 0.3];
+          if (r < choices[0]) {
+            b.state = "charge";
+            b.t = 0.5;
+            b.dir = state.player.x + state.player.w / 2 < b.x + b.w / 2 ? -1 : 1;
+          } else if (r < choices[0] + choices[1]) {
+            b.state = "summon";
+            b.t = 0.6;
+          } else {
+            b.state = "slam";
+            b.vy = -780;
+          }
         }
       }
     } else if (b.state === "charge") {
@@ -1652,7 +1718,7 @@ export function initGame(
       if (stomp) {
         b.hp -= 3;
         b.hurt = 0.3;
-        pl.vy = -520;
+        pl.vy = BOSS_STOMP_BOUNCE_VY;
         state.hitstop = 0.07;
         state.shake = Math.max(state.shake, 0.22);
         addNotice("-3", b.x + b.w / 2, b.y, "#ffb1c2");
@@ -1671,7 +1737,7 @@ export function initGame(
     const goal = { x: state.portal.x + 14, y: state.portal.y + 10, w: 48, h: 96 };
     if (rectsOverlap(state.player, goal) && scene === "playing") {
       scene = "complete";
-      state.score += Math.max(0, Math.floor(600 - state.time * 6));
+      state.score += levelTimeBonus(state.time);
       const r = computeRating();
       prog.stars[state.currentLevel - 1] = Math.max(prog.stars[state.currentLevel - 1] || 0, r);
       prog.unlocked = Math.max(prog.unlocked, Math.min(4, state.currentLevel + 1));
@@ -1687,6 +1753,8 @@ export function initGame(
     const lookAhead = pl.facing > 0 ? 130 : -60;
     state.targetCameraX = clamp(pl.x - VIEW_W * 0.38 + lookAhead, 0, WORLD_W - VIEW_W);
     state.cameraX = lerp(state.cameraX, state.targetCameraX, Math.min(1, dt * 5.5));
+    // Keep shake from stacking into a nauseating wobble during hit clusters.
+    state.shake = Math.min(state.shake, 0.5);
     if (state.shake > 0) state.shake = Math.max(0, state.shake - dt);
   }
 
@@ -1740,16 +1808,24 @@ export function initGame(
       nextNoteTime = audio.currentTime + 0.05;
     }
 
+    if (settings.muted || state.paused || scene !== "playing") {
+      nextNoteTime = Math.max(nextNoteTime, audio.currentTime + 0.05);
+      return;
+    }
+
     while (nextNoteTime < audio.currentTime + 0.1) {
-      if (scene === "playing") {
-        playMusicStep(musicStep, nextNoteTime);
-      }
+      playMusicStep(musicStep, nextNoteTime);
       nextNoteTime += stepDuration;
       musicStep = (musicStep + 1) % 64;
     }
   }
 
   function update(dt: number) {
+    if (state.paused) {
+      keys.jumpPressed = false;
+      keys.jumpReleased = false;
+      return;
+    }
     frameTime += dt;
     scheduleMusic();
 
@@ -1787,8 +1863,9 @@ export function initGame(
 
   function draw() {
     ctx.save();
-    const shakeX = state.shake > 0 ? (Math.random() - 0.5) * 10 : 0;
-    const shakeY = state.shake > 0 ? (Math.random() - 0.5) * 8 : 0;
+    const shakeAmt = reducedMotion ? 0 : 1;
+    const shakeX = state.shake > 0 ? (Math.random() - 0.5) * 10 * shakeAmt : 0;
+    const shakeY = state.shake > 0 ? (Math.random() - 0.5) * 8 * shakeAmt : 0;
     ctx.translate(shakeX, shakeY);
 
     drawBackground();
@@ -1979,11 +2056,11 @@ export function initGame(
     const row = rowMap[g.spriteType] || 0;
     const frame = Math.floor(frameTime * (g.phase === 2 ? 13 : 9)) % 4;
     ctx.save();
-    if (g.hurt > 0 && Math.floor(frameTime * 24) % 2 === 0) ctx.globalAlpha = 0.42;
-    const glow = 0.14 + Math.sin(frameTime * 6) * 0.05;
-    ctx.globalAlpha *= 1;
+    const hurtFlicker = g.hurt > 0 && Math.floor(frameTime * 24) % 2 === 0;
+    if (hurtFlicker) ctx.globalAlpha = 0.42;
+    const glow = reducedMotion ? 0.16 : 0.14 + Math.sin(frameTime * 6) * 0.05;
     ctx.fillStyle = g.color;
-    ctx.globalAlpha = glow;
+    ctx.globalAlpha = hurtFlicker ? 0.42 : glow;
     ctx.beginPath();
     ctx.ellipse(g.x + g.w / 2, g.y + g.h / 2, g.w * 0.62, g.h * 0.64, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -2116,22 +2193,26 @@ export function initGame(
     }
   }
 
+  // Ethan sheet rows (192x208 cells, 8 cols): 0 idle, 1 ready, 2 run, 3 crouch,
+  // 4 skid, 5 jump, 6 fall, 7 hurt, 8 waiting.
   function playerSprite() {
     const pl = state.player;
     const facingLeft = pl.facing < 0;
 
     if (pl.state === "run") {
-      return { row: facingLeft ? 2 : 1, frame: Math.floor(pl.anim) % 8, flip: false };
+      return { row: 2, frame: Math.floor(pl.anim) % 8, flip: facingLeft };
     }
-    if (pl.state === "hurt") return { row: 5, frame: Math.floor(pl.anim) % 8, flip: facingLeft };
-    if (pl.state === "victory") return { row: 3, frame: Math.floor(pl.anim) % 4, flip: facingLeft };
-    if (pl.state === "throw" || pl.state === "crouch_throw") return { row: 7, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    if (pl.state === "crouch") return { row: 6, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    if (pl.state === "jump") return { row: 4, frame: Math.min(4, Math.floor(pl.anim) % 5), flip: facingLeft };
-    if (pl.state === "fall") return { row: 4, frame: Math.max(2, Math.floor(pl.anim) % 5), flip: facingLeft };
-    if (pl.state === "landing") return { row: 4, frame: 4, flip: facingLeft };
-    if (pl.state === "review") return { row: 8, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    if (pl.state === "waiting") return { row: 6, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "skid") {
+      return { row: 4, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    }
+    if (pl.state === "hurt") return { row: 7, frame: Math.floor(pl.anim) % 8, flip: facingLeft };
+    if (pl.state === "victory") return { row: 1, frame: Math.floor(pl.anim) % 4, flip: facingLeft };
+    if (pl.state === "throw" || pl.state === "crouch_throw") return { row: 1, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "crouch") return { row: 3, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "jump") return { row: 5, frame: Math.min(4, Math.floor(pl.anim) % 5), flip: facingLeft };
+    if (pl.state === "fall") return { row: 6, frame: Math.max(2, Math.floor(pl.anim) % 5), flip: facingLeft };
+    if (pl.state === "landing") return { row: 6, frame: 4, flip: facingLeft };
+    if (pl.state === "review" || pl.state === "waiting") return { row: 8, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
     return { row: 0, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
   }
 
@@ -2141,8 +2222,13 @@ export function initGame(
     const crouching = pl.state === "crouch" || pl.state === "crouch_throw";
     const drawW = crouching ? 92 : 96;
     const drawH = crouching ? 86 : 104;
-    const x = pl.x + pl.w / 2 - drawW / 2;
-    const y = pl.y + pl.h - drawH + (crouching ? 18 : 8);
+    const sq = pl.squash || 0;
+    const sw = drawW * (1 + 0.18 * sq);
+    const sh = drawH * (1 - 0.18 * sq);
+    // Idle breathing keeps Ethan feeling alive when the player is still.
+    const idleBob = pl.state === "idle" && !reducedMotion ? Math.sin(frameTime * 3.2) * 2 : 0;
+    const x = pl.x + pl.w / 2 - sw / 2;
+    const y = pl.y + pl.h - sh + (crouching ? 18 : 8) + idleBob;
     const flashing = pl.invuln > 0 && Math.floor(frameTime * 18) % 2 === 0;
     ctx.save();
     if (pl.superTimer > 0) {
@@ -2173,9 +2259,9 @@ export function initGame(
     if (sprite.flip) {
       ctx.translate(pl.x + pl.w / 2, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(images.ethan, sprite.frame * 192, sprite.row * 208, 192, 208, -drawW / 2, y, drawW, drawH);
+      ctx.drawImage(images.ethan, sprite.frame * 192, sprite.row * 208, 192, 208, -sw / 2, y, sw, sh);
     } else {
-      ctx.drawImage(images.ethan, sprite.frame * 192, sprite.row * 208, 192, 208, x, y, drawW, drawH);
+      ctx.drawImage(images.ethan, sprite.frame * 192, sprite.row * 208, 192, 208, x, y, sw, sh);
     }
     ctx.restore();
   }
@@ -2275,6 +2361,9 @@ export function initGame(
     ctx.fillStyle = "#fff";
     ctx.font = "800 15px ui-rounded, system-ui";
     ctx.fillText(`Time ${Math.floor(state.time)}s`, VIEW_W - 24, 60);
+    ctx.fillStyle = settings.muted ? "rgba(255,255,255,0.55)" : "#9df5ff";
+    ctx.font = "700 13px ui-rounded, system-ui";
+    ctx.fillText(settings.muted ? "Sound off (M)" : "Sound on (M)", VIEW_W - 24, 84);
 
     const pl = state.player;
     if (pl && pl.comboTimer > 0 && pl.stompStreak >= 2) {
@@ -2284,7 +2373,7 @@ export function initGame(
       ctx.translate(VIEW_W / 2, 96);
       ctx.scale(pulse, pulse);
       ctx.fillStyle = "#fff2a9";
-      ctx.font = "1000 26px ui-rounded, system-ui";
+      ctx.font = "900 26px ui-rounded, system-ui";
       ctx.textAlign = "center";
       ctx.lineWidth = 5;
       ctx.strokeStyle = "rgba(42,17,54,0.6)";
@@ -2353,7 +2442,7 @@ export function initGame(
     roundRect(ctx, VIEW_W / 2 - 260, 128, 520, 130, 26);
     ctx.stroke();
     ctx.fillStyle = "#fff2a9";
-    ctx.font = "1000 40px ui-rounded, system-ui";
+    ctx.font = "900 40px ui-rounded, system-ui";
     ctx.textAlign = "center";
     ctx.fillText(state.banner.title, VIEW_W / 2, 190);
     ctx.fillStyle = "#9df5ff";
@@ -2363,20 +2452,41 @@ export function initGame(
   }
 
   function drawSceneOverlay() {
-    if (scene === "playing") return;
+    if (scene === "playing") {
+      if (state.paused) {
+        ctx.save();
+        ctx.fillStyle = "rgba(18, 9, 42, 0.62)";
+        ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#fff2a9";
+        ctx.font = "900 54px ui-rounded, system-ui";
+        ctx.fillText("Paused", VIEW_W / 2, 250);
+        ctx.fillStyle = "#fff";
+        ctx.font = "700 19px ui-rounded, system-ui";
+        ctx.fillText("Press P or Esc to keep playing", VIEW_W / 2, 292);
+        ctx.fillStyle = "#9df5ff";
+        ctx.font = "800 16px ui-rounded, system-ui";
+        ctx.fillText("Move: A/D or arrows · Jump: Space · Fire: F · Sound: M", VIEW_W / 2, 328);
+        ctx.fillStyle = "rgba(255,255,255,0.72)";
+        ctx.font = "700 15px ui-rounded, system-ui";
+        ctx.fillText("R restarts the level", VIEW_W / 2, 356);
+        ctx.restore();
+      }
+      return;
+    }
     ctx.save();
     ctx.fillStyle = "rgba(18, 9, 42, 0.58)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ctx.textAlign = "center";
 
     if (scene === "loading") {
-      titleText("Loading Ethan the Jumper", "Preparing stars, slimes, and jump magic...", "Please wait");
+      titleText("Loading Ethan the Jumping Boy", "Preparing stars, slimes, and jump magic...", "Please wait");
     } else if (scene === "title") {
-      titleText("Ethan the Jumper", "Four worlds of platforming — collect stars, stomp enemies, beat the King Roller.", "← → select level · Enter to start");
+      titleText("Ethan the Jumping Boy", "Four worlds of platforming, collect stars, stomp enemies, beat the King Roller.", "Arrows select level · Enter to start");
       drawLevelSelect();
       drawMiniControls();
     } else if (scene === "gameover") {
-      titleText("Game Over", `Checkpoint: Level ${state.checkpointLevel} · Score banked: ${state.checkpointScore}.`, `Press Enter to restart Level ${state.checkpointLevel} with full hearts`);
+      titleText("Game Over", `Score ${state.score} · Best ${prog.bestScore || 0}`, `Press Enter to retry Level ${state.checkpointLevel} from your checkpoint score`);
     } else if (scene === "complete") {
       const r = computeRating();
       const starsText = "★".repeat(r) + "☆".repeat(3 - r);
@@ -2423,7 +2533,7 @@ export function initGame(
   function drawLevelSelect() {
     const unlocked = prog.unlocked || 1;
     for (let i = 0; i < 4; i++) {
-      const cx = 210 + i * 150;
+      const cx = 270 + i * 150;
       const isUnlocked = i + 1 <= unlocked;
       const isSelected = state.selectLevel === i + 1;
       ctx.fillStyle = isSelected ? "rgba(157,245,255,0.28)" : "rgba(255,255,255,0.08)";
@@ -2463,7 +2573,7 @@ export function initGame(
     ctx.stroke();
 
     ctx.fillStyle = "#fff2a9";
-    ctx.font = "1000 52px ui-rounded, system-ui";
+    ctx.font = "900 52px ui-rounded, system-ui";
     ctx.fillText(title, VIEW_W / 2, 165);
     ctx.fillStyle = "#fff";
     ctx.font = "700 19px ui-rounded, system-ui";
@@ -2477,7 +2587,7 @@ export function initGame(
     ctx.fillStyle = "rgba(255,255,255,0.78)";
     ctx.font = "800 15px ui-rounded, system-ui";
     ctx.fillText("Move: A/D or arrows · Jump: Space/W/Up · Crouch: S/Down", VIEW_W / 2, 385);
-    ctx.fillText("Fireball: F/J · Restart: R", VIEW_W / 2, 407);
+    ctx.fillText("Fireball: F/J · Restart: R · Pause: P · Sound: M", VIEW_W / 2, 407);
   }
 
   function wrapText(text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
@@ -2510,7 +2620,16 @@ export function initGame(
   function handleKeyDown(e: KeyboardEvent) {
     initAudio();
     const k = e.key.toLowerCase();
-    if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "f", "j", "r", "enter"].includes(k)) e.preventDefault();
+    if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "f", "j", "r", "enter", "p", "m", "escape"].includes(k)) e.preventDefault();
+    if (k === "m") {
+      toggleMute();
+      return;
+    }
+    if ((k === "p" || k === "escape") && scene === "playing" && !state.player.dead) {
+      state.paused = !state.paused;
+      keys.jumpPressed = false;
+      return;
+    }
     if (scene === "title") {
       const maxSel = Math.max(1, prog.unlocked || 1);
       if (k === "arrowleft" || k === "a") state.selectLevel = clamp(state.selectLevel - 1, 1, maxSel);
@@ -2600,6 +2719,11 @@ export function initGame(
   window.addEventListener("keyup", handleKeyUp, { passive: false });
   const onPointerDownAudio = () => initAudio();
   window.addEventListener("pointerdown", onPointerDownAudio, { once: true });
+  const autoPause = () => {
+    if (scene === "playing" && !state.paused && state.player && !state.player.dead) state.paused = true;
+  };
+  window.addEventListener("blur", autoPause);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) autoPause(); });
 
   const cleanupLeft = bindMobileButton(btnLeft, "left");
   const cleanupRight = bindMobileButton(btnRight, "right");
@@ -2635,6 +2759,7 @@ export function initGame(
     window.removeEventListener("keydown", handleKeyDown);
     window.removeEventListener("keyup", handleKeyUp);
     window.removeEventListener("pointerdown", onPointerDownAudio);
+    window.removeEventListener("blur", autoPause);
     cleanupLeft && cleanupLeft();
     cleanupRight && cleanupRight();
     cleanupCrouch && cleanupCrouch();
