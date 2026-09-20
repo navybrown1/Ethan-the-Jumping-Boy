@@ -41,10 +41,31 @@ export function initGame(
   let scaleY = 1;
   let backingChanged = true;
 
+  // The game is authored in a 960x540 logical space, so the on-canvas UI shrinks
+  // along with the world. Measured on a 390px phone the canvas is 350 CSS px wide,
+  // which drew the 20px HUD score at 7.3 physical px and the 11px badges at 4.0px
+  // -- unreadable. uiScale enlarges screen-space UI on small displays so it keeps
+  // a legible physical size instead of scaling with the world. The bound is driven
+  // by the smallest readout that still carries information a player needs (the
+  // 15px timer), so solving 15 * uiScale * (cssW / VIEW_W) >= UI_MIN_HUD_PX gives
+  // 576/cssW. Clamped at 1 so large screens are untouched, and capped so the
+  // enlarged HUD can never outgrow the 960-wide layout it has to fit inside.
+  const UI_MIN_HUD_PX = 9;
+  const UI_MAX_SCALE = 2.1;
+  const UI_REF_FONT = 15;
+  let uiScale = 1;
+  // Audio stays muted until the first user gesture (autoplay policy). On a touch
+  // device that gesture is a tap, so the hint must not tell a child to press a key.
+  const coarsePointer =
+    typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+
   function applyCanvasScale() {
     const rect = canvas.getBoundingClientRect();
     const cssW = rect.width || VIEW_W;
     const cssH = rect.height || VIEW_H;
+    // Recomputed before the early return below, because uiScale depends on the
+    // CSS box rather than the backing store.
+    uiScale = clamp(((UI_MIN_HUD_PX / UI_REF_FONT) * VIEW_W) / cssW, 1, UI_MAX_SCALE);
     const dpr = Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio || 1));
     const bw = Math.max(1, Math.round(cssW * dpr));
     const bh = Math.max(1, Math.round(cssH * dpr));
@@ -1920,9 +1941,13 @@ export function initGame(
     drawAmbient();
     drawLightning();
     drawParticlesScreen();
-    drawHud();
+    // The HUD reports live game state, so it is drawn only while playing (which
+    // includes pause). Drawing it over the title and level-select panels made the
+    // two collide on narrow screens, where the panels fill most of the canvas.
+    if (scene === "playing") drawHud();
     drawBanner();
     drawSceneOverlay();
+    drawAudioHint();
 
     ctx.restore();
   }
@@ -2051,7 +2076,9 @@ export function initGame(
       ctx.drawImage(images.powerups, cols[pu.kind] * 48, 0, 48, 48, -22, -22, 44, 44);
       ctx.restore();
       ctx.fillStyle = "rgba(255,255,255,0.88)";
-      ctx.font = "900 11px ui-rounded, system-ui";
+      // These labels are anchored in the world but carry UI meaning, so they
+      // scale with uiScale too; at 11px they were 3.2 physical px on a phone.
+      ctx.font = `900 ${(11 * uiScale).toFixed(1)}px ui-rounded, system-ui`;
       ctx.textAlign = "center";
       const label = pu.kind === "mushroom" ? "SUPER" : pu.kind === "star" ? "8s STAR" : "FIRE";
       ctx.fillText(label, pu.x + pu.w / 2, y + 58);
@@ -2122,7 +2149,9 @@ export function initGame(
     if (b.state === "charge" && b.t > 0) {
       ctx.globalAlpha = 0.5 + Math.sin(frameTime * 20) * 0.2;
       ctx.fillStyle = "#ffd76a";
-      ctx.font = "900 14px ui-rounded, system-ui";
+      // This is the only warning that the boss is about to charge, so it scales
+      // with uiScale rather than rendering at 4px on a phone.
+      ctx.font = `900 ${(14 * uiScale).toFixed(1)}px ui-rounded, system-ui`;
       ctx.textAlign = "center";
       ctx.fillText("!", b.x + b.w / 2, b.y - 16);
       ctx.globalAlpha = 1;
@@ -2148,8 +2177,8 @@ export function initGame(
     ctx.drawImage(images.portal, f * 96, 0, 96, 128, state.portal.x - 10, state.portal.y - 8, 96, 128);
 
     const locked = !!(state.guardian && state.guardian.alive);
-    ctx.fillStyle = locked ? "#ffb1c2" : "rgba(255,255,255,0.72)";
-    ctx.font = "900 18px ui-rounded, system-ui";
+    ctx.fillStyle = locked ? "#ffb1c2" : "rgba(255,255,255,0.82)";
+    ctx.font = `900 ${(18 * uiScale).toFixed(1)}px ui-rounded, system-ui`;
     ctx.textAlign = "center";
     ctx.fillText(locked ? "BOSS LOCKED" : "Finish", state.portal.x + 38, state.portal.y - 14);
   }
@@ -2364,10 +2393,10 @@ export function initGame(
     ctx.globalAlpha = 1;
   }
 
-  function drawHeart(x: number, y: number, filled: boolean) {
+  function drawHeart(x: number, y: number, filled: boolean, s = 1) {
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(1.2, 1.2);
+    ctx.scale(1.2 * s, 1.2 * s);
     ctx.beginPath();
     ctx.moveTo(0, 6);
     ctx.bezierCurveTo(-12, -5, -24, 9, 0, 25);
@@ -2382,48 +2411,121 @@ export function initGame(
   }
 
   function drawHud() {
-    ctx.save();
-    ctx.fillStyle = "rgba(35,24,64,0.36)";
-    roundRect(ctx, 18, 16, 360, 64, 20);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "900 20px ui-rounded, system-ui";
-    ctx.textAlign = "left";
-    ctx.fillText(`Score ${state.score}`, 34, 42);
-    ctx.fillText(`Stars ${state.stars}/${state.starsList.length}`, 190, 42);
-    const hearts = Math.max(3, state.lives);
-    for (let i = 0; i < hearts; i++) drawHeart(48 + i * 34, 58, i < state.lives);
-
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    roundRect(ctx, 30, 82, 340, 8, 4);
-    ctx.fill();
-    ctx.fillStyle = "#facc15";
-    roundRect(ctx, 30, 82, 340 * clamp(state.cameraX / (WORLD_W - VIEW_W), 0, 1), 8, 4);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(35,24,64,0.36)";
-    roundRect(ctx, VIEW_W - 220, 16, 202, 54, 18);
-    ctx.fill();
-    ctx.fillStyle = "#fff2a9";
-    ctx.font = "900 18px ui-rounded, system-ui";
-    ctx.textAlign = "right";
-    ctx.fillText(`Lv ${state.currentLevel} · ${state.levelName}`, VIEW_W - 24, 39);
-    ctx.fillStyle = "#fff";
-    ctx.font = "800 15px ui-rounded, system-ui";
-    ctx.fillText(`Time ${Math.floor(state.time)}s`, VIEW_W - 24, 60);
-    ctx.fillStyle = settings.muted ? "rgba(255,255,255,0.55)" : "#9df5ff";
-    ctx.font = "700 13px ui-rounded, system-ui";
-    ctx.fillText(settings.muted ? "Sound off (M)" : "Sound on (M)", VIEW_W - 24, 84);
-
+    const u = uiScale;
+    // Phones render the canvas too small for the desktop HUD, so below this
+    // point the readouts collapse onto one wide panel and the text is enlarged
+    // by uiScale (see applyCanvasScale). Above it the original two-panel layout
+    // is kept, only corrected.
+    const narrow = u > 1.25;
+    const F = (weight: number, px: number) => `${weight} ${(px * u).toFixed(1)}px ui-rounded, system-ui`;
+    // 0.36 alpha left HUD text at ~3.0:1 against the world-1 sky and the cyan
+    // sound label at ~1.2:1. 0.66 measures >=5.5:1 for every colour used here,
+    // clearing WCAG AA (4.5:1) for text at these sizes.
+    const PANEL = "rgba(35,24,64,0.66)";
     const pl = state.player;
+    const hearts = Math.max(3, state.lives);
+    const progress = clamp(state.cameraX / (WORLD_W - VIEW_W), 0, 1);
+
+    ctx.save();
+
+    if (narrow) {
+      // One full-width panel, two rows, so the enlarged text still fits. The
+      // hearts are capped below uiScale so the panel does not have to grow tall
+      // enough to swallow a quarter of the playfield.
+      const px = 10;
+      const py = 8;
+      const pw = VIEW_W - px * 2;
+      const ph = 126;
+      const hs = Math.min(u, 1.4);
+      ctx.fillStyle = PANEL;
+      roundRect(ctx, px, py, pw, ph, 20);
+      ctx.fill();
+
+      ctx.font = F(900, 20);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#fff";
+      ctx.fillText(`Score ${state.score}`, px + 16, py + 44);
+      ctx.textAlign = "center";
+      ctx.fillText(`Stars ${state.stars}/${state.starsList.length}`, VIEW_W / 2, py + 44);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#fff2a9";
+      ctx.font = F(900, 18);
+      ctx.fillText(`Lv ${state.currentLevel}`, VIEW_W - px - 16, py + 44);
+
+      for (let i = 0; i < hearts; i++) {
+        drawHeart(px + 30 + i * 34 * hs, py + 56, i < state.lives, hs);
+      }
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#fff";
+      ctx.font = F(800, 15);
+      ctx.fillText(`Time ${Math.floor(state.time)}s`, VIEW_W - px - 16, py + 86);
+
+      // Progress sits inside the panel and gets a dark track, because the
+      // original 15%-white track vanished against the bright sky.
+      ctx.fillStyle = "rgba(12,6,30,0.55)";
+      roundRect(ctx, px + 16, py + ph - 14, pw - 32, 8, 4);
+      ctx.fill();
+      ctx.fillStyle = "#facc15";
+      roundRect(ctx, px + 16, py + ph - 14, (pw - 32) * progress, 8, 4);
+      ctx.fill();
+    } else {
+      // Left panel. Height grew from 64 to 92: the hearts are drawn from y=58
+      // with a ~30px downward extent, so at 64 they hung outside the panel and
+      // the progress bar (y=82) painted over their lower 6px.
+      const px = 18;
+      const py = 12;
+      const pw = 360;
+      const ph = 92;
+      ctx.fillStyle = PANEL;
+      roundRect(ctx, px, py, pw, ph, 20);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff";
+      ctx.font = F(900, 20);
+      ctx.textAlign = "left";
+      ctx.fillText(`Score ${state.score}`, px + 16, py + 26);
+      ctx.fillText(`Stars ${state.stars}/${state.starsList.length}`, px + 172, py + 26);
+
+      for (let i = 0; i < hearts; i++) {
+        drawHeart(px + 30 + i * 34, py + 46, i < state.lives);
+      }
+
+      ctx.fillStyle = "rgba(12,6,30,0.55)";
+      roundRect(ctx, px + 12, py + 78, pw - 24, 8, 4);
+      ctx.fill();
+      ctx.fillStyle = "#facc15";
+      roundRect(ctx, px + 12, py + 78, (pw - 24) * progress, 8, 4);
+      ctx.fill();
+
+      // Right panel. The sound label used to be drawn at y=84 while the panel
+      // ended at y=70, so it floated unanchored over the sky.
+      const rw = 210;
+      const rx = VIEW_W - px - rw;
+      ctx.fillStyle = PANEL;
+      roundRect(ctx, rx, py, rw, ph, 20);
+      ctx.fill();
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#fff2a9";
+      // Level names vary in length and uiScale can push this past the panel, so
+      // fit it rather than letting it spill.
+      fitFont(`Lv ${state.currentLevel} · ${state.levelName}`, 900, 18 * u, rw - 24);
+      ctx.fillText(`Lv ${state.currentLevel} · ${state.levelName}`, VIEW_W - px - 12, py + 26);
+      ctx.fillStyle = "#fff";
+      ctx.font = F(800, 15);
+      ctx.fillText(`Time ${Math.floor(state.time)}s`, VIEW_W - px - 12, py + 50);
+      ctx.fillStyle = settings.muted ? "rgba(255,255,255,0.75)" : "#9df5ff";
+      ctx.font = F(700, 13);
+      ctx.fillText(settings.muted ? "Sound off (M)" : "Sound on (M)", VIEW_W - px - 12, py + 76);
+    }
+
     if (pl && pl.comboTimer > 0 && pl.stompStreak >= 2) {
       const m = mult();
       const pulse = 1 + Math.sin(frameTime * 10) * 0.12;
       ctx.save();
-      ctx.translate(VIEW_W / 2, 96);
+      ctx.translate(VIEW_W / 2, narrow ? 190 : 96);
       ctx.scale(pulse, pulse);
       ctx.fillStyle = "#fff2a9";
-      ctx.font = "900 26px ui-rounded, system-ui";
+      ctx.font = F(900, 26);
       ctx.textAlign = "center";
       ctx.lineWidth = 5;
       ctx.strokeStyle = "rgba(42,17,54,0.6)";
@@ -2436,18 +2538,20 @@ export function initGame(
     const b = state.boss;
     const activeBoss = g && g.active && g.alive ? g : b && b.active && !b.dying ? b : null;
     if (activeBoss) {
+      // Sits below the panels; at y=14 it overlapped the left panel's right edge.
       const bw = 320;
-      ctx.fillStyle = "rgba(35,24,64,0.62)";
-      roundRect(ctx, VIEW_W / 2 - bw / 2, 14, bw, 20, 10);
+      const by = narrow ? 132 : 112;
+      ctx.fillStyle = "rgba(35,24,64,0.72)";
+      roundRect(ctx, VIEW_W / 2 - bw / 2, by, bw, 20, 10);
       ctx.fill();
       const pct = clamp(activeBoss.hp / activeBoss.maxHp, 0, 1);
       ctx.fillStyle = activeBoss.color || "#ff4269";
-      roundRect(ctx, VIEW_W / 2 - bw / 2 + 2, 16, (bw - 4) * pct, 16, 8);
+      roundRect(ctx, VIEW_W / 2 - bw / 2 + 2, by + 2, (bw - 4) * pct, 16, 8);
       ctx.fill();
       ctx.fillStyle = "#fff";
-      ctx.font = "900 13px ui-rounded, system-ui";
+      ctx.font = F(900, 13);
       ctx.textAlign = "center";
-      ctx.fillText(activeBoss.name || "KING ROLLER", VIEW_W / 2, 46);
+      ctx.fillText(activeBoss.name || "KING ROLLER", VIEW_W / 2, by + 32);
     }
 
     if (pl) {
@@ -2456,83 +2560,124 @@ export function initGame(
       if (pl.invincible > 0) badges.push({ text: `STAR ${Math.ceil(pl.invincible)}s`, color: "#9df5ff" });
       if (pl.starRush > 0) badges.push({ text: `RUSH ${Math.ceil(pl.starRush)}s`, color: "#ffd76a" });
       if (pl.firePower) badges.push({ text: "FIRE READY", color: "#ff9d3c" });
-      let bx = VIEW_W / 2 - (badges.length * 94) / 2;
+      const bwid = 88 * u;
+      const gap = 6 * u;
+      const total = badges.length * bwid + (badges.length - 1) * gap;
+      let bx = VIEW_W / 2 - total / 2;
+      const by = narrow ? 168 : 140;
       for (const badge of badges) {
-        ctx.fillStyle = "rgba(18,9,42,0.68)";
-        roundRect(ctx, bx, 58, 88, 25, 12);
+        ctx.fillStyle = "rgba(18,9,42,0.78)";
+        roundRect(ctx, bx, by, bwid, 25 * u, 12 * u);
         ctx.fill();
         ctx.fillStyle = badge.color;
-        ctx.font = "900 11px ui-rounded, system-ui";
+        ctx.font = F(900, 11);
         ctx.textAlign = "center";
-        ctx.fillText(badge.text, bx + 44, 75);
-        bx += 94;
+        ctx.fillText(badge.text, bx + bwid / 2, by + 17 * u);
+        bx += bwid + gap;
       }
     }
 
-    if (mutedBecauseNoGesture && scene !== "loading") {
-      ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.font = "700 12px ui-rounded, system-ui";
-      ctx.fillText("Press any key to enable sound", VIEW_W / 2, 25);
-    }
+    ctx.restore();
+  }
+
+  // Audio stays muted until the first user gesture (browser autoplay policy).
+  // Drawn outside drawHud so it also appears on the title and menu screens, where
+  // a player is most likely to wonder why there is no sound.
+  function drawAudioHint() {
+    if (!mutedBecauseNoGesture || scene === "loading") return;
+    const narrow = uiScale > 1.25;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = `700 ${(narrow ? 15 : 12) * uiScale}px ui-rounded, system-ui`;
+    // Narrow sits below the panels, which reach y~508; wide uses the original
+    // single line between the two top panels.
+    ctx.fillText(
+      coarsePointer ? "Tap anywhere to enable sound" : "Press any key to enable sound",
+      VIEW_W / 2,
+      narrow ? VIEW_H - 8 : 25
+    );
     ctx.restore();
   }
 
   function drawBanner() {
     if (state.banner.timer <= 0) return;
+    const u = uiScale;
+    const narrow = u > 1.25;
     const t = state.banner.timer;
     const alpha = clamp(Math.min(t / 0.4, (1.8 - t) / 0.25), 0, 1);
+    // Width is capped so the panel cannot exceed the canvas on small screens.
+    const bw = Math.min(520 * u, VIEW_W - 40);
+    // Sits below the badges (and, on narrow, below the enlarged badge row) so the
+    // boss name under the boss bar is not painted over.
+    const bh = Math.min(130 * u, narrow ? 220 : 130);
+    const by = narrow ? 250 : 170;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = "rgba(18,9,42,0.55)";
-    roundRect(ctx, VIEW_W / 2 - 260, 128, 520, 130, 26);
+    ctx.fillStyle = "rgba(18,9,42,0.66)";
+    roundRect(ctx, VIEW_W / 2 - bw / 2, by, bw, bh, 26 * u);
     ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,0.2)";
     ctx.lineWidth = 2;
-    roundRect(ctx, VIEW_W / 2 - 260, 128, 520, 130, 26);
+    roundRect(ctx, VIEW_W / 2 - bw / 2, by, bw, bh, 26 * u);
     ctx.stroke();
-    ctx.fillStyle = "#fff2a9";
-    ctx.font = "900 40px ui-rounded, system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(state.banner.title, VIEW_W / 2, 190);
+    ctx.fillStyle = "#fff2a9";
+    // Offsets are fractions of the box so they stay correct at every height.
+    fitFont(state.banner.title, 900, 40 * u, bw - 40);
+    ctx.fillText(state.banner.title, VIEW_W / 2, by + bh * 0.48);
     ctx.fillStyle = "#9df5ff";
-    ctx.font = "800 20px ui-rounded, system-ui";
-    ctx.fillText(state.banner.sub, VIEW_W / 2, 228);
+    fitFont(state.banner.sub, 800, 20 * u, bw - 40);
+    ctx.fillText(state.banner.sub, VIEW_W / 2, by + bh * 0.78);
     ctx.restore();
   }
 
   function drawSceneOverlay() {
+    const u = uiScale;
     if (scene === "playing") {
       if (state.paused) {
         ctx.save();
-        ctx.fillStyle = "rgba(18, 9, 42, 0.62)";
+        ctx.fillStyle = "rgba(18, 9, 42, 0.72)";
         ctx.fillRect(0, 0, VIEW_W, VIEW_H);
         ctx.textAlign = "center";
+        const cx = VIEW_W / 2;
+        let y = 270 - 20 * u;
         ctx.fillStyle = "#fff2a9";
-        ctx.font = "900 54px ui-rounded, system-ui";
-        ctx.fillText("Paused", VIEW_W / 2, 250);
+        fitFont("Paused", 900, 54 * u, VIEW_W - 80);
+        ctx.fillText("Paused", cx, y);
+        y += 42 * u;
         ctx.fillStyle = "#fff";
-        ctx.font = "700 19px ui-rounded, system-ui";
-        ctx.fillText("Press P or Esc to keep playing", VIEW_W / 2, 292);
+        fitFont("Press P or Esc to keep playing", 700, 19 * u, VIEW_W - 80);
+        ctx.fillText("Press P or Esc to keep playing", cx, y);
+        y += 36 * u;
         ctx.fillStyle = "#9df5ff";
-        ctx.font = "800 16px ui-rounded, system-ui";
-        ctx.fillText("Move: A/D or arrows · Jump: Space · Fire: F · Sound: M", VIEW_W / 2, 328);
-        ctx.fillStyle = "rgba(255,255,255,0.72)";
-        ctx.font = "700 15px ui-rounded, system-ui";
-        ctx.fillText("R restarts the level", VIEW_W / 2, 356);
+        fitFont("Move: A/D or arrows · Jump: Space · Fire: F · Sound: M", 800, 16 * u, VIEW_W - 60);
+        ctx.fillText("Move: A/D or arrows · Jump: Space · Fire: F · Sound: M", cx, y);
+        y += 28 * u;
+        ctx.fillStyle = "rgba(255,255,255,0.78)";
+        fitFont("R restarts the level", 700, 15 * u, VIEW_W - 80);
+        ctx.fillText("R restarts the level", cx, y);
         ctx.restore();
       }
       return;
     }
     ctx.save();
-    ctx.fillStyle = "rgba(18, 9, 42, 0.58)";
+    ctx.fillStyle = "rgba(18, 9, 42, 0.66)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ctx.textAlign = "center";
 
     if (scene === "loading") {
       titleText("Loading Ethan the Jumping Boy", "Preparing stars, slimes, and jump magic...", "Please wait");
     } else if (scene === "title") {
-      titleText("Ethan the Jumping Boy", "Four worlds of platforming, collect stars, stomp enemies, beat the King Roller.", "Arrows select level · Enter to start");
+      // The title screen also draws the level cards and the control hints, so the
+      // copy is packed into the top of the panel to leave bands for them. Narrow
+      // already reflows the cards into a 2x2 grid, so it keeps the default.
+      titleText(
+        "Ethan the Jumping Boy",
+        "Four worlds of platforming, collect stars, stomp enemies, beat the King Roller.",
+        "Arrows select level · Enter to start",
+        uiScale > 1.25 ? undefined : { title: 0.175, sub: 0.2875, prompt: 0.8375 }
+      );
       drawLevelSelect();
       drawMiniControls();
     } else if (scene === "gameover") {
@@ -2540,25 +2685,15 @@ export function initGame(
     } else if (scene === "complete") {
       const r = computeRating();
       const starsText = "★".repeat(r) + "☆".repeat(3 - r);
-      if (state.currentLevel < 4) {
-        titleText(
-          `Level ${state.currentLevel} Complete!`,
-          `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`,
-          `Press Enter for Level ${state.currentLevel + 1}`
-        );
-        ctx.fillStyle = "#ffd76a";
-        ctx.font = "900 30px ui-rounded, system-ui";
-        ctx.fillText(starsText, VIEW_W / 2, 430);
-      } else {
-        titleText(
-          "Level 4 Complete!",
-          `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`,
-          "Press Enter to see your final score"
-        );
-        ctx.fillStyle = "#ffd76a";
-        ctx.font = "900 30px ui-rounded, system-ui";
-        ctx.fillText(starsText, VIEW_W / 2, 430);
-      }
+      const last = state.currentLevel >= 4;
+      titleText(
+        `Level ${state.currentLevel} Complete!`,
+        `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`,
+        last ? "Press Enter to see your final score" : `Press Enter for Level ${state.currentLevel + 1}`
+      );
+      ctx.fillStyle = "#ffd76a";
+      fitFont(starsText, 900, 30 * u, VIEW_W - 80);
+      ctx.fillText(starsText, VIEW_W / 2, 430);
     } else if (scene === "win") {
       titleText(
         "You Win!",
@@ -2566,14 +2701,15 @@ export function initGame(
         "Press Enter to play again"
       );
       ctx.fillStyle = "#ffd76a";
-      ctx.font = "900 22px ui-rounded, system-ui";
       const lines = [1, 2, 3, 4].map(i => {
         const s = prog.stars[i - 1] || 0;
         return `L${i} ${"★".repeat(s)}${"☆".repeat(3 - s)}`;
       });
-      ctx.fillText(lines.join("   "), VIEW_W / 2, 428);
+      const joined = lines.join("   ");
+      fitFont(joined, 900, 22 * u, VIEW_W - 60);
+      ctx.fillText(joined, VIEW_W / 2, 428);
       ctx.fillStyle = "#fff";
-      ctx.font = "700 16px ui-rounded, system-ui";
+      fitFont(`Best score: ${prog.bestScore || 0}`, 700, 16 * u, VIEW_W - 80);
       ctx.fillText(`Best score: ${prog.bestScore || 0}`, VIEW_W / 2, 455);
     }
 
@@ -2581,63 +2717,128 @@ export function initGame(
   }
 
   function drawLevelSelect() {
+    const u = uiScale;
+    const narrow = u > 1.25;
     const unlocked = prog.unlocked || 1;
+    const names = ["Rainbow Grove", "Sunset Cliffs", "Crystal Caves", "Storm Summit"];
+
+    // Phones get a 2x2 grid: at uiScale ~2 four 128px cards cannot hold the
+    // enlarged names, so each card gets roughly twice the width instead. The
+    // grid starts below the wrapped subtitle and ends above the prompt.
+    const cw = narrow ? 300 : 128;
+    const ch = narrow ? 108 : 130;
+    const gx = narrow ? 24 : 22;
+    const gy = narrow ? 12 : 0;
+    const cols = narrow ? 2 : 4;
+    const x0 = (VIEW_W - (cols * cw + (cols - 1) * gx)) / 2;
+    // Wide sits below the subtitle (which wraps to two lines ending ~y210) and
+    // above the prompt at y405. The original y208 collided with the subtitle.
+    const y0 = narrow ? 210 : 240;
+    // Cap the type by the card height so the enlarged sizes cannot overrun it.
+    const fLevel = Math.min(20 * u, ch * 0.34);
+    const fName = Math.min(15 * u, ch * 0.28);
+    const fStars = Math.min(18 * u, ch * 0.32);
+
     for (let i = 0; i < 4; i++) {
-      const cx = 270 + i * 150;
+      const cx = x0 + (i % cols) * (cw + gx) + cw / 2;
+      const cy = y0 + Math.floor(i / cols) * (ch + gy);
       const isUnlocked = i + 1 <= unlocked;
       const isSelected = state.selectLevel === i + 1;
+
       ctx.fillStyle = isSelected ? "rgba(157,245,255,0.28)" : "rgba(255,255,255,0.08)";
-      roundRect(ctx, cx - 64, 208, 128, 130, 18);
+      roundRect(ctx, cx - cw / 2, cy, cw, ch, 18);
       ctx.fill();
       ctx.lineWidth = isSelected ? 3 : 1;
       ctx.strokeStyle = isSelected ? "#9df5ff" : "rgba(255,255,255,0.18)";
-      roundRect(ctx, cx - 64, 208, 128, 130, 18);
+      roundRect(ctx, cx - cw / 2, cy, cw, ch, 18);
       ctx.stroke();
-      ctx.fillStyle = isUnlocked ? "#fff2a9" : "rgba(255,255,255,0.4)";
-      ctx.font = "900 20px ui-rounded, system-ui";
-      ctx.fillText(`L${i + 1}`, cx, 242);
-      ctx.fillStyle = isUnlocked ? "#fff" : "rgba(255,255,255,0.4)";
-      ctx.font = "700 15px ui-rounded, system-ui";
-      const names = ["Rainbow Grove", "Sunset Cliffs", "Crystal Caves", "Storm Summit"];
-      ctx.fillText(names[i], cx, 266);
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = isUnlocked ? "#fff2a9" : "rgba(255,255,255,0.5)";
+      fitFont(`L${i + 1}`, 900, fLevel, cw - 16);
+      ctx.fillText(`L${i + 1}`, cx, cy + ch * 0.34);
+      ctx.fillStyle = isUnlocked ? "#fff" : "rgba(255,255,255,0.5)";
+      fitFont(names[i], 700, fName, cw - 16);
+      ctx.fillText(names[i], cx, cy + ch * 0.58);
+      const s = isUnlocked ? prog.stars[i] || 0 : 0;
       if (isUnlocked) {
-        const s = prog.stars[i] || 0;
         ctx.fillStyle = "#ffd76a";
-        ctx.font = "900 18px ui-rounded, system-ui";
-        ctx.fillText("★".repeat(s) + "☆".repeat(3 - s), cx, 298);
+        fitFont("★★★", 900, fStars, cw - 16);
+        ctx.fillText("★".repeat(s) + "☆".repeat(3 - s), cx, cy + ch * 0.88);
       } else {
-        ctx.fillStyle = "rgba(255,255,255,0.45)";
-        ctx.font = "800 15px ui-rounded, system-ui";
-        ctx.fillText("LOCKED", cx, 298);
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        fitFont("LOCKED", 800, fName, cw - 16);
+        ctx.fillText("LOCKED", cx, cy + ch * 0.88);
       }
     }
   }
 
-  function titleText(title: string, subtitle: string, prompt: string) {
+  function titleText(
+    title: string,
+    subtitle: string,
+    prompt: string,
+    layout?: { title: number; sub: number; prompt: number }
+  ) {
+    const u = uiScale;
+    const narrow = u > 1.25;
+    // The panel grows with uiScale but is capped to the canvas, and the internal
+    // positions are fractions of the panel so they hold at any size. Wide grows
+    // from 300 to 400 tall so the level cards and the control hints each get their
+    // own band instead of colliding with the subtitle.
+    const bw = Math.min(720 * u, VIEW_W - 40);
+    const bh = narrow ? Math.min(300 * u, VIEW_H - 60) : 400;
+    const bx = (VIEW_W - bw) / 2;
+    const by = (VIEW_H - bh) / 2;
+
     ctx.fillStyle = "rgba(255,255,255,0.12)";
-    roundRect(ctx, 120, 100, 720, 300, 34);
+    roundRect(ctx, bx, by, bw, bh, 34);
     ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 2;
-    roundRect(ctx, 120, 100, 720, 300, 34);
+    roundRect(ctx, bx, by, bw, bh, 34);
     ctx.stroke();
 
+    const fTitle = layout ? layout.title : narrow ? 0.16 : 0.25;
+    const fSub = layout ? layout.sub : narrow ? 0.28 : 0.44;
+    const fPrompt = layout ? layout.prompt : narrow ? 0.95 : 0.8;
+
+    ctx.textAlign = "center";
     ctx.fillStyle = "#fff2a9";
-    ctx.font = "900 52px ui-rounded, system-ui";
-    ctx.fillText(title, VIEW_W / 2, 165);
+    fitFont(title, 900, 52 * u, bw - 48);
+    ctx.fillText(title, VIEW_W / 2, by + bh * fTitle);
     ctx.fillStyle = "#fff";
-    ctx.font = "700 19px ui-rounded, system-ui";
-    wrapText(subtitle, VIEW_W / 2, 215, 560, 28);
+    const subPx = fitFont(subtitle, 700, 19 * u, bw - 48);
+    wrapText(subtitle, VIEW_W / 2, by + bh * fSub, bw - 64, subPx * 1.45);
     ctx.fillStyle = "#9df5ff";
-    ctx.font = "900 22px ui-rounded, system-ui";
-    ctx.fillText(prompt, VIEW_W / 2, 360);
+    fitFont(prompt, 900, 22 * u, bw - 48);
+    ctx.fillText(prompt, VIEW_W / 2, by + bh * fPrompt);
   }
 
   function drawMiniControls() {
-    ctx.fillStyle = "rgba(255,255,255,0.78)";
-    ctx.font = "800 15px ui-rounded, system-ui";
-    ctx.fillText("Move: A/D or arrows · Jump: Space/W/Up · Crouch: S/Down", VIEW_W / 2, 385);
-    ctx.fillText("Fireball: F/J · Restart: R · Pause: P · Sound: M", VIEW_W / 2, 407);
+    // Keyboard hints are useless on a phone, where the on-screen buttons are the
+    // affordance, and at uiScale > 1.25 there is no room left for two more lines.
+    if (uiScale > 1.25) return;
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    const a = "Move: A/D or arrows · Jump: Space/W/Up · Crouch: S/Down";
+    const b = "Fireball: F/J · Restart: R · Pause: P · Sound: M";
+    ctx.font = `800 ${15 * uiScale}px ui-rounded, system-ui`;
+    ctx.textAlign = "center";
+    ctx.fillText(a, VIEW_W / 2, 440);
+    ctx.fillText(b, VIEW_W / 2, 462);
+  }
+
+  // Draw text at the largest size up to maxPx that still fits maxWidth, and
+  // return the size used. uiScale enlarges overlay text on small screens and
+  // several overlay strings are long, so without this they would overflow their
+  // panel. Sets ctx.font as a side effect.
+  function fitFont(text: string, weight: number, maxPx: number, maxWidth: number) {
+    let px = maxPx;
+    ctx.font = `${weight} ${px.toFixed(1)}px ui-rounded, system-ui`;
+    while (px > 9 && ctx.measureText(text).width > maxWidth) {
+      px -= 1;
+      ctx.font = `${weight} ${px.toFixed(1)}px ui-rounded, system-ui`;
+    }
+    return px;
   }
 
   function wrapText(text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
@@ -2819,7 +3020,21 @@ export function initGame(
     });
 
   if (import.meta.env.DEV) {
-    (window as any).__ethan = { state, resetGame, nextLevel, damageGuardian };
+    // Test hook. The getters matter: uiScale and the canvas scale are recomputed
+    // on every resize, so a plain snapshot would go stale and let a test measure
+    // a value the renderer is not actually using.
+    (window as any).__ethan = {
+      state,
+      resetGame,
+      nextLevel,
+      damageGuardian,
+      get uiScale() {
+        return uiScale;
+      },
+      get canvasScale() {
+        return scaleX / (window.devicePixelRatio || 1);
+      },
+    };
   }
 
   return () => {
