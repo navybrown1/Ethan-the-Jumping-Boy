@@ -3108,29 +3108,36 @@ export function initGame(
 
   function playerSprite() {
     const pl = state.player;
-    // The atlas art is drawn facing left, so mirror it when Ethan faces right.
-    const flip = pl.facing > 0;
+    // Direction is a property of the authored pose, not the whole atlas. The
+    // run row is drawn facing left, while the throw row is drawn facing right.
+    // Applying the old single flip rule to both made Ethan throw with his back
+    // to the fireball on every shot in one direction.
+    const flipForRow = (row: number) => {
+      if (row === 1) return pl.facing < 0; // throw: authored facing right
+      if (row === 2) return pl.facing > 0; // run: authored facing left
+      return false; // front-facing poses do not need mirroring
+    };
     const cycle = (row: number, speed = 1) => ({
       row,
       frame: Math.floor(pl.anim * speed) % ROW_FRAMES[row],
-      flip
+      flip: flipForRow(row)
     });
 
     if (pl.state === "run") return cycle(2);
     // Braced brake pose; the sheet has no skid art of its own.
-    if (pl.state === "skid") return { row: 4, frame: 0, flip };
+    if (pl.state === "skid") return { row: 4, frame: 0, flip: flipForRow(4) };
     if (pl.state === "hurt") return cycle(5, 0.9);
     if (pl.state === "victory") return cycle(3, 0.8);
     if (pl.state === "throw" || pl.state === "crouch_throw") return cycle(1, 1.4);
-    if (pl.state === "crouch") return { row: 4, frame: 0, flip };
+    if (pl.state === "crouch") return { row: 4, frame: 0, flip: flipForRow(4) };
     if (pl.state === "jump") {
       // Arms-out arc (row 4 frames 1-3) reads as a leap. Tied to ascent rather
       // than a timer so the wide pose holds through the apex.
       const rise = clamp((JUMP_V - pl.vy) / JUMP_V, 0, 1);
-      return { row: 4, frame: 1 + Math.round(rise * 2), flip };
+      return { row: 4, frame: 1 + Math.round(rise * 2), flip: flipForRow(4) };
     }
-    if (pl.state === "fall") return { row: 4, frame: 4, flip };
-    if (pl.state === "landing") return { row: 4, frame: 0, flip };
+    if (pl.state === "fall") return { row: 4, frame: 4, flip: flipForRow(4) };
+    if (pl.state === "landing") return { row: 4, frame: 0, flip: flipForRow(4) };
     if (pl.state === "review" || pl.state === "waiting") return cycle(8);
     return cycle(0);
   }
@@ -4099,6 +4106,12 @@ export function initGame(
       resetGame,
       nextLevel,
       damageGuardian,
+      // Expose the live player render descriptor so dev tests can verify that
+      // a directional pose and its movement direction agree. This stays inside
+      // the DEV-only hook and is removed from production builds.
+      get playerSprite() {
+        return { ...playerSprite() };
+      },
       get uiScale() {
         return uiScale;
       },

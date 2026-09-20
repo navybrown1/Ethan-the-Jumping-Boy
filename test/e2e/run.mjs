@@ -9,6 +9,7 @@
 //   npm run test:e2e -- --only=traverse level traversability only
 //   npm run test:e2e -- --only=flash    photosensitivity (WCAG 2.3.1 flash rate) only
 //   npm run test:e2e -- --only=motion   reduced-motion differential only
+//   npm run test:e2e -- --only=fire    fireball direction and throw pose only
 //   npm run test:e2e -- --only=boss     no-powers boss verification only
 //   npm run test:e2e -- --only=perf     frame-time measurement only
 //   npm run test:e2e -- --levels=1,4    just two bosses
@@ -42,6 +43,7 @@ import * as traversal from "./traversal.mjs";
 import * as fairness from "./fairness.mjs";
 import * as finalBoss from "./final-boss.mjs";
 import * as fullscreen from "./fullscreen.mjs";
+import * as fireDirection from "./fire-direction.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -97,9 +99,11 @@ try {
     want("traverse") ||
     want("flash") ||
     want("motion") || want("fairness") || want("final") || want("fullscreen")
+    || want("fire")
   ) {
     const modules = [];
     if (want("fullscreen")) modules.push(fullscreen);
+    if (want("fire")) modules.push(fireDirection);
     if (want("fairness")) modules.push(fairness);
     if (want("final")) modules.push(finalBoss);
     if (want("arena")) modules.push(arenaRunway);
