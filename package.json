@@ -19,7 +19,8 @@
     "test:perf": "node test/e2e/performance.mjs",
     "test:touch": "node test/e2e/touch-input.mjs",
     "test:audio": "node test/e2e/audio.mjs",
-    "test:traverse": "node test/e2e/traversal.mjs"
+    "test:traverse": "node test/e2e/traversal.mjs",
+    "test:flash": "node test/e2e/photosensitivity.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

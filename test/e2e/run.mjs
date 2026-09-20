@@ -7,6 +7,7 @@
 //   npm run test:e2e -- --only=touch    phone layout and touch input only
 //   npm run test:e2e -- --only=audio    audio gating, mixing and recovery only
 //   npm run test:e2e -- --only=traverse level traversability only
+//   npm run test:e2e -- --only=flash    photosensitivity (WCAG 2.3.1 flash rate) only
 //   npm run test:e2e -- --only=boss     no-powers boss verification only
 //   npm run test:e2e -- --only=perf     frame-time measurement only
 //   npm run test:e2e -- --levels=1,4    just two bosses
@@ -23,6 +24,7 @@ import * as arenaRunway from "./arena-runway.mjs";
 import * as audio from "./audio.mjs";
 import * as bossNoPowers from "./boss-nopowers.mjs";
 import * as performance from "./performance.mjs";
+import * as photosensitivity from "./photosensitivity.mjs";
 import * as prodSmoke from "./prod-smoke.mjs";
 import * as subpath from "./subpath.mjs";
 import * as touchInput from "./touch-input.mjs";
@@ -79,13 +81,15 @@ try {
     want("perf") ||
     want("touch") ||
     want("audio") ||
-    want("traverse")
+    want("traverse") ||
+    want("flash")
   ) {
     const modules = [];
     if (want("arena")) modules.push(arenaRunway);
     if (want("touch")) modules.push(touchInput);
     if (want("audio")) modules.push(audio);
     if (want("traverse")) modules.push(traversal);
+    if (want("flash")) modules.push(photosensitivity);
     if (want("boss")) modules.push(bossNoPowers);
     if (want("perf")) modules.push(performance);
     await phase("gameplay (dev server)", startDevServer, modules);
