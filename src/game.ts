@@ -28,8 +28,34 @@ export function initGame(
   btnFire: HTMLElement | null
 ) {
   const ctx = canvas.getContext("2d")!;
-  const VIEW_W = canvas.width;
-  const VIEW_H = canvas.height;
+  // Logical resolution the whole game is authored in. The canvas bitmap is
+  // sized to the real on-screen box times devicePixelRatio so the game is crisp
+  // on HiDPI displays and on phones, and every draw call below still works in
+  // these logical units. Without this the bitmap is a fixed 960x540 that gets
+  // stretched ~2x on a typical Retina-class screen (measured: 1.98 device
+  // pixels per bitmap pixel) and downscaled on phones.
+  const VIEW_W = 960;
+  const VIEW_H = 540;
+  const MAX_DPR = 2;
+  let scaleX = 1;
+  let scaleY = 1;
+  let backingChanged = true;
+
+  function applyCanvasScale() {
+    const rect = canvas.getBoundingClientRect();
+    const cssW = rect.width || VIEW_W;
+    const cssH = rect.height || VIEW_H;
+    const dpr = Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio || 1));
+    const bw = Math.max(1, Math.round(cssW * dpr));
+    const bh = Math.max(1, Math.round(cssH * dpr));
+    if (bw === canvas.width && bh === canvas.height) return;
+    canvas.width = bw;
+    canvas.height = bh;
+    scaleX = bw / VIEW_W;
+    scaleY = bh / VIEW_H;
+    backingChanged = true;
+  }
+
   const WORLD_W = 5400;
   const WORLD_H = 760;
   const TILE = 64;
@@ -1862,6 +1888,13 @@ export function initGame(
   }
 
   function draw() {
+    // Reset the transform every frame: resizing the canvas bitmap clears it.
+    ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    if (backingChanged) {
+      // A gradient is tied to the backing store, so rebuild it after a resize.
+      state.skyGrad = null;
+      backingChanged = false;
+    }
     ctx.save();
     const shakeAmt = reducedMotion ? 0 : 1;
     const shakeX = state.shake > 0 ? (Math.random() - 0.5) * 10 * shakeAmt : 0;
@@ -2193,27 +2226,44 @@ export function initGame(
     }
   }
 
-  // Ethan sheet rows (192x208 cells, 8 cols): 0 idle, 1 ready, 2 run, 3 crouch,
-  // 4 skid, 5 jump, 6 fall, 7 hurt, 8 waiting.
+  // Atlas layout, verified cell-by-cell against the shipped webp
+  // (192x208 cells, 8 columns). Each entry is how many cells the row actually
+  // contains -- stepping past it draws an empty cell and Ethan disappears:
+  //   0 idle (6)      1 run cycle A (8)   2 run cycle B (8)
+  //   3 wave / cheer (4)                  4 crouch, then arms-out (5)
+  //   5 sad / crying (8)                  6 idle + blink (6)
+  //   7 waiting, checks wrist (6)         8 thinking (6)
+  // The sheet has no dedicated jump, fall, skid or hurt art, so those states
+  // borrow the closest existing read (row 4 for airborne, row 5 for distress).
+  const ROW_FRAMES = [6, 8, 8, 4, 5, 8, 6, 6, 6];
+
   function playerSprite() {
     const pl = state.player;
-    const facingLeft = pl.facing < 0;
+    // The atlas art is drawn facing left, so mirror it when Ethan faces right.
+    const flip = pl.facing > 0;
+    const cycle = (row: number, speed = 1) => ({
+      row,
+      frame: Math.floor(pl.anim * speed) % ROW_FRAMES[row],
+      flip
+    });
 
-    if (pl.state === "run") {
-      return { row: 2, frame: Math.floor(pl.anim) % 8, flip: facingLeft };
+    if (pl.state === "run") return cycle(2);
+    // Braced brake pose; the sheet has no skid art of its own.
+    if (pl.state === "skid") return { row: 4, frame: 0, flip };
+    if (pl.state === "hurt") return cycle(5, 0.9);
+    if (pl.state === "victory") return cycle(3, 0.8);
+    if (pl.state === "throw" || pl.state === "crouch_throw") return cycle(1, 1.4);
+    if (pl.state === "crouch") return { row: 4, frame: 0, flip };
+    if (pl.state === "jump") {
+      // Arms-out arc (row 4 frames 1-3) reads as a leap. Tied to ascent rather
+      // than a timer so the wide pose holds through the apex.
+      const rise = clamp((JUMP_V - pl.vy) / JUMP_V, 0, 1);
+      return { row: 4, frame: 1 + Math.round(rise * 2), flip };
     }
-    if (pl.state === "skid") {
-      return { row: 4, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    }
-    if (pl.state === "hurt") return { row: 7, frame: Math.floor(pl.anim) % 8, flip: facingLeft };
-    if (pl.state === "victory") return { row: 1, frame: Math.floor(pl.anim) % 4, flip: facingLeft };
-    if (pl.state === "throw" || pl.state === "crouch_throw") return { row: 1, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    if (pl.state === "crouch") return { row: 3, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    if (pl.state === "jump") return { row: 5, frame: Math.min(4, Math.floor(pl.anim) % 5), flip: facingLeft };
-    if (pl.state === "fall") return { row: 6, frame: Math.max(2, Math.floor(pl.anim) % 5), flip: facingLeft };
-    if (pl.state === "landing") return { row: 6, frame: 4, flip: facingLeft };
-    if (pl.state === "review" || pl.state === "waiting") return { row: 8, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
-    return { row: 0, frame: Math.floor(pl.anim) % 6, flip: facingLeft };
+    if (pl.state === "fall") return { row: 4, frame: 4, flip };
+    if (pl.state === "landing") return { row: 4, frame: 0, flip };
+    if (pl.state === "review" || pl.state === "waiting") return cycle(8);
+    return cycle(0);
   }
 
   function drawPlayer() {
@@ -2618,15 +2668,20 @@ export function initGame(
   }
 
   function handleKeyDown(e: KeyboardEvent) {
+    // Never swallow browser shortcuts. Without this guard Ctrl/Cmd+R, +F, +P,
+    // +A, +S and friends are all eaten because e.key is still "r", "f", etc.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     initAudio();
     const k = e.key.toLowerCase();
     if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "f", "j", "r", "enter", "p", "m", "escape"].includes(k)) e.preventDefault();
+    // Holding a key repeats keydown; one-shot actions must not retrigger.
+    const repeat = e.repeat;
     if (k === "m") {
-      toggleMute();
+      if (!repeat) toggleMute();
       return;
     }
-    if ((k === "p" || k === "escape") && scene === "playing" && !state.player.dead) {
-      state.paused = !state.paused;
+    if ((k === "p" || k === "escape") && scene === "playing" && state.player && !state.player.dead) {
+      if (!repeat) state.paused = !state.paused;
       keys.jumpPressed = false;
       return;
     }
@@ -2644,8 +2699,8 @@ export function initGame(
       keys.jump = true;
       if (scene === "title") startGame();
     }
-    if (k === "enter") startGame();
-    if (k === "r") resetGame("playing");
+    if (k === "enter") { if (!repeat) startGame(); }
+    if (k === "r") { if (!repeat) resetGame("playing"); }
   }
 
   function handleKeyUp(e: KeyboardEvent) {
@@ -2723,7 +2778,18 @@ export function initGame(
     if (scene === "playing" && !state.paused && state.player && !state.player.dead) state.paused = true;
   };
   window.addEventListener("blur", autoPause);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) autoPause(); });
+  const onVisibility = () => { if (document.hidden) autoPause(); };
+  document.addEventListener("visibilitychange", onVisibility);
+
+  // Keep the bitmap matched to the real display size, including phone rotation
+  // and dragging the window between monitors with different pixel densities.
+  let resizeObserver: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => applyCanvasScale());
+    resizeObserver.observe(canvas);
+  }
+  const onResize = () => applyCanvasScale();
+  window.addEventListener("resize", onResize);
 
   const cleanupLeft = bindMobileButton(btnLeft, "left");
   const cleanupRight = bindMobileButton(btnRight, "right");
@@ -2734,6 +2800,7 @@ export function initGame(
   Promise.all(Object.entries(assetList).map(([name, src]) => loadImage(name, src)))
     .then(entries => {
       for (const [name, img] of entries) images[name] = img;
+      applyCanvasScale();
       resetGame("title");
       last = performance.now();
       rafId = requestAnimationFrame(loop);
@@ -2741,6 +2808,8 @@ export function initGame(
     .catch(err => {
       console.error(err);
       scene = "loading";
+      applyCanvasScale();
+      ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
       ctx.fillStyle = "#120921";
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       ctx.fillStyle = "#fff";
@@ -2760,6 +2829,9 @@ export function initGame(
     window.removeEventListener("keyup", handleKeyUp);
     window.removeEventListener("pointerdown", onPointerDownAudio);
     window.removeEventListener("blur", autoPause);
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("resize", onResize);
+    if (resizeObserver) resizeObserver.disconnect();
     cleanupLeft && cleanupLeft();
     cleanupRight && cleanupRight();
     cleanupCrouch && cleanupCrouch();

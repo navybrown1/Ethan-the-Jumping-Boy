@@ -185,3 +185,38 @@ canvas {
     grid-column: span 1;
   }
 }
+
+/* Landscape phones are short and wide. Measured at 844x390 the page overflowed
+   by 368px while the canvas (touch-action: none) swallowed the drags needed to
+   scroll, so the controls were unreachable. Drop the page chrome and size the
+   canvas from the available height instead of the width so everything fits. */
+@media (orientation: landscape) and (max-height: 620px) {
+  .shell {
+    padding: 8px;
+    width: 100%;
+  }
+
+  .hero {
+    display: none;
+  }
+
+  .game-wrap {
+    width: auto;
+    height: calc(100vh - 104px);
+    height: calc(100dvh - 104px);
+    aspect-ratio: 16 / 9;
+  }
+
+  .game-wrap canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mobile-controls {
+    margin-top: 8px;
+  }
+
+  .mobile-controls button {
+    min-height: 52px;
+  }
+}
