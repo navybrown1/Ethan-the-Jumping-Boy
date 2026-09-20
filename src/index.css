@@ -185,3 +185,125 @@ canvas {
     grid-column: span 1;
   }
 }
+
+/* Short desktop windows: at 1366x768 the page measured 15px taller than the
+   viewport. Harmless with a wheel, since touch-action: none does not block
+   wheel scrolling and the canvas itself stays fully visible, but untidy. Trim
+   the shell padding so the page fits without scrolling. */
+@media (pointer: fine) and (max-height: 820px) {
+  .shell {
+    padding: 20px 32px;
+  }
+}
+
+/* Portrait phones. Both .game-wrap and canvas are touch-action: none, so they
+   swallow the drags a user would need to scroll: any page overflow is
+   effectively unreachable. Measured at 320x568 the page overflowed by 66px and
+   pushed the Jump and Fire buttons below the fold (bottom 618 on a 568 viewport).
+   Drop the hero, which only repeats the instructions the game already draws on
+   its own title screen, and park the controls at the bottom where thumbs are. */
+@media (pointer: coarse) and (max-width: 760px) and (orientation: portrait) {
+  .shell {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 10px;
+    gap: 10px;
+    justify-content: space-between;
+    overflow: hidden;
+  }
+
+  .hero {
+    display: none;
+  }
+
+  .game-wrap {
+    flex: 0 1 auto;
+    width: 100%;
+    min-height: 0;
+    /* The base 3rem/2.8rem radii are sized for a 952px desktop canvas. On a
+       362px phone canvas they clip roughly 119 logical px at each corner, which
+       cut the top of the "Lv 1" readout off. Shrink them proportionally. */
+    border-radius: 18px;
+  }
+
+  .game-wrap canvas {
+    border-radius: 14px;
+  }
+
+  .mobile-controls {
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  /* Fill the second row: a full-width Jump plus Fire reads better than leaving
+     the third cell empty. */
+  .mobile-controls .jump {
+    grid-column: 1 / 3;
+  }
+
+  .mobile-controls .fire {
+    grid-column: 3 / 4;
+  }
+
+  .mobile-controls button {
+    min-height: 58px;
+  }
+}
+
+/* Landscape phones are short and wide, so height is the binding constraint.
+   Measured at 844x390 the original width-driven layout overflowed by 368px, and
+   a `height: 100%` + aspect-ratio variant rendered an 820x461 canvas inside a
+   390px viewport -- clipped, with the controls pushed off screen. Deriving the
+   width from a fixed height budget is deterministic: the wrap gets a definite
+   width, so the aspect ratio yields an exact, fully visible height. */
+@media (orientation: landscape) and (max-height: 620px) {
+  .shell {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 8px;
+    gap: 8px;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .hero {
+    display: none;
+  }
+
+  /* 90px = padding 16 + gap 8 + one 52px control row + slack. The +8px is the
+     wrap's own 4px borders: with box-sizing: border-box an aspect-ratio on the
+     wrap would constrain the BORDER box, leaving the canvas content box 8px
+     short and stretching the world ~1.6%. The ratio therefore lives on the
+     canvas (see the base rule) and the wrap just bounds the width. */
+  .game-wrap {
+    width: min(100%, calc((100dvh - 90px) * 16 / 9 + 8px));
+    border-radius: 18px;
+    margin: 0 auto;
+  }
+
+  .game-wrap canvas {
+    border-radius: 14px;
+  }
+
+  .mobile-controls {
+    margin: 0;
+  }
+
+  .mobile-controls button {
+    min-height: 52px;
+  }
+}
+
+/* Below 760px wide the control grid is 3 columns, so it wraps to two rows and
+   needs a taller reservation: 158px = padding 16 + gap 8 + 114px of controls
+   + slack. */
+@media (orientation: landscape) and (max-height: 620px) and (max-width: 760px) {
+  .game-wrap {
+    width: min(100%, calc((100dvh - 158px) * 16 / 9 + 8px));
+  }
+}
