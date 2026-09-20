@@ -143,7 +143,7 @@ export async function launchBrowser() {
  * have it, so the production smoke test passes false.
  */
 export async function openGame(browser, url, opts = {}) {
-  const { viewport, hasTouch, isMobile, deviceScaleFactor, requireHook = true, initScript } = opts;
+  const { viewport, hasTouch, isMobile, deviceScaleFactor, requireHook = true, initScript, onPage } = opts;
   const page = await browser.newPage({
     viewport: viewport || { width: 1280, height: 800 },
     ...(hasTouch ? { hasTouch: true } : {}),
@@ -155,6 +155,10 @@ export async function openGame(browser, url, opts = {}) {
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  // Attach extra listeners (request/response taps, mainly) before navigating,
+  // since anything registered after `goto` has already missed the document and
+  // its first few fetches.
+  if (onPage) await onPage(page);
   // Runs before any page script, which is the only way to observe things the
   // game touches during module init. Accepts one function or an array of them.
   for (const script of Array.isArray(initScript) ? initScript : [initScript]) {

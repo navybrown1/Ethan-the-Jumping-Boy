@@ -1,7 +1,8 @@
 // End-to-end test runner.
 //
-//   npm run test:e2e                    everything (production smoke + arena + touch + audio + traversal + bosses + perf)
+//   npm run test:e2e                    everything (production smoke + subpath + arena + touch + audio + traversal + bosses + perf)
 //   npm run test:e2e -- --only=prod     production bundle smoke test only
+//   npm run test:e2e -- --only=subpath  serving the built files from a subpath (GitHub Pages) only
 //   npm run test:e2e -- --only=arena    arena runway geometry only
 //   npm run test:e2e -- --only=touch    phone layout and touch input only
 //   npm run test:e2e -- --only=audio    audio gating, mixing and recovery only
@@ -23,6 +24,7 @@ import * as audio from "./audio.mjs";
 import * as bossNoPowers from "./boss-nopowers.mjs";
 import * as performance from "./performance.mjs";
 import * as prodSmoke from "./prod-smoke.mjs";
+import * as subpath from "./subpath.mjs";
 import * as touchInput from "./touch-input.mjs";
 import * as traversal from "./traversal.mjs";
 
@@ -63,7 +65,14 @@ async function phase(label, startServer, modules) {
 }
 
 try {
-  if (want("prod")) await phase("production smoke", startProdServer, [prodSmoke]);
+  // Both of these read the built files rather than the dev server. They share
+  // one phase so `dist/` is built exactly once: a second `build()` in the same
+  // process wipes `dist/assets` again, and that churn is what trips the
+  // sandbox's bulk-delete guard.
+  const prodModules = [];
+  if (want("prod")) prodModules.push(prodSmoke);
+  if (want("subpath")) prodModules.push(subpath);
+  if (prodModules.length) await phase("production (built files)", startProdServer, prodModules);
   if (
     want("arena") ||
     want("boss") ||
