@@ -16,7 +16,7 @@
 // there is no child process to leak and no port to guess.
 
 import { build, createServer, preview } from "vite";
-import { chromium } from "playwright-core";
+import { chromium, firefox } from "playwright-core";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -125,7 +125,35 @@ const LAUNCH_ARGS = [
   "--disable-renderer-backgrounding",
 ];
 
-export async function launchBrowser() {
+/**
+ * Launch a browser. Defaults to the system Chrome; pass "firefox" for the
+ * second engine.
+ *
+ * The two are not interchangeable and the differences are not cosmetic:
+ *
+ *   * The LAUNCH_ARGS are Chromium switches. Firefox ignores or rejects them,
+ *     so it launches bare.
+ *   * Chrome comes from the system install via channel:"chrome". Firefox is a
+ *     playwright-managed download, so it needs `npx playwright-core install
+ *     firefox` once. The cached builds on a machine are usually pinned to a
+ *     *different* playwright version and cannot be reused: a firefox-1522 from
+ *     an older install launches but then dies on `Browser.setDefaultViewport`,
+ *     which this playwright does not send. Check the build number matches
+ *     before assuming a cached engine is usable.
+ */
+export async function launchBrowser(engine = process.env.BROWSER_ENGINE || "chrome") {
+  if (engine === "firefox") {
+    try {
+      return await firefox.launch();
+    } catch (err) {
+      throw new Error(
+        "Could not launch Firefox. It is a playwright-managed download, not a " +
+          "system install, so run: npx playwright-core install firefox\n" +
+          `Underlying error: ${err.message}`
+      );
+    }
+  }
+  if (engine !== "chrome") throw new Error(`unknown engine: ${engine}`);
   try {
     return await chromium.launch({ channel: "chrome", args: LAUNCH_ARGS });
   } catch (err) {
@@ -321,12 +349,12 @@ export class Results {
  * A test module is `run(ctx)` returning a boolean; this wrapper is what makes
  * each one runnable on its own with `node test/e2e/<file>.mjs`.
  */
-export async function runStandalone(run, { prod = false, label = "test" } = {}) {
+export async function runStandalone(run, { prod = false, label = "test", engine } = {}) {
   const server = prod ? await startProdServer() : await startDevServer();
-  const browser = await launchBrowser();
+  const browser = await launchBrowser(engine);
   try {
     const url = process.env.GAME_URL || server.url;
-    console.log(`${label} against ${url}\n`);
+    console.log(`${label} against ${url} [${browser.browserType().name()}]\n`);
     const ok = await run({ browser, url, results: new Results(label), outDir: ensureOut() });
     process.exitCode = ok ? 0 : 1;
     return ok;

@@ -17,6 +17,14 @@
 // production smoke test deliberately runs against the built files over a plain
 // static server, because the point is to check what actually ships.
 //
+// Cross-engine smoke (test/e2e/cross-browser.mjs) is deliberately NOT in this
+// list. It needs a second browser, and Firefox here is a 122 MB
+// playwright-managed download, so folding it in would make the whole suite fail
+// on a machine that has only Chrome. Run it on its own:
+//
+//   npm run test:xbrowser                          # firefox
+//   BROWSER_ENGINE=chrome npm run test:xbrowser    # control, should also pass
+//
 // Exits non-zero if any check fails, so it can be wired into CI as-is.
 
 import { Results, ensureOut, launchBrowser, startDevServer, startProdServer } from "./harness.mjs";
