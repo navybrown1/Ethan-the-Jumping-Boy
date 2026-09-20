@@ -186,6 +186,16 @@ canvas {
   }
 }
 
+/* Short desktop windows: at 1366x768 the page measured 15px taller than the
+   viewport. Harmless with a wheel, since touch-action: none does not block
+   wheel scrolling and the canvas itself stays fully visible, but untidy. Trim
+   the shell padding so the page fits without scrolling. */
+@media (pointer: fine) and (max-height: 820px) {
+  .shell {
+    padding: 20px 32px;
+  }
+}
+
 /* Portrait phones. Both .game-wrap and canvas are touch-action: none, so they
    swallow the drags a user would need to scroll: any page overflow is
    effectively unreachable. Measured at 320x568 the page overflowed by 66px and
