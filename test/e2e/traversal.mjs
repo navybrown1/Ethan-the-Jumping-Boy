@@ -32,30 +32,24 @@ const BUDGET_MS = Number(process.env.TRAVERSE_MS || 50000);
 //
 // A stall is a spot where a player who only ever holds right and jumps gets
 // pinned against something and has to walk back to a place where the game will
-// let them jump. Both of these are the same defect: a platform whose underside
-// sits 70-100px above a walkable surface. The player is 70px tall, so they can
-// walk under it but have 0-30px of jump left, and whatever is ahead needs more
-// than that.
+// let them jump. The cause is always the same: a platform whose underside sits
+// 70-100px above a walkable surface, so a 70px player can walk under it but has
+// almost no jump left, and whatever is ahead needs more than that.
 //
-// These are recorded rather than fixed because clearing them means redesigning
-// the surrounding platform cluster, and nudging the numbers has already been
-// shown to trade one trap for another. What this list buys is that a NEW stall
-// anywhere in any level fails the suite, and a stall that gets fixed shows up
-// as a stale entry to delete.
+// The list is empty, which is the point. Four stalls were found and all four are
+// fixed: level 1 at x=716 (10px of rise), x=2656 (0px), level 3 at x=3216 (10px)
+// and x=3556 (30px). All four levels now cross end to end, so any stall reported
+// from here on is a regression and fails the suite.
 //
-// The two that were fixed are worth noting for scale: level 1 stalled at x=716
-// with 10px of jump (now clear to x=2656) and level 3 stalled at x=3216 with
-// 10px (now clear to x=3556).
-const KNOWN_STALLS = {
-  1: {
-    x: 2656,
-    why: "ceiling 2500..2660 has its underside at y=326, exactly head height for a player standing on the block at top=396, so rise is 0px",
-  },
-  3: {
-    x: 3556,
-    why: "ceiling 3500..3640 leaves 30px of rise, and the platform at 3600 needs 51px to climb onto",
-  },
-};
+// The mechanism is kept because clearing a stall is not always cheap. If one is
+// ever reintroduced, record it here with its measured cause rather than deleting
+// the check or weakening the assertion:
+//
+//   1: { x: 2656, why: "underside at exactly head height, rise is 0px" },
+//
+// A recorded entry keeps the suite green, a NEW stall still fails, and a fixed
+// one shows up as a stale entry to delete.
+const KNOWN_STALLS = {};
 const STALL_TOLERANCE = 60;
 // How long without forward progress counts as pinned. Generous: the levels have
 // moving platforms with long cycles that can legitimately hold a player still.
@@ -182,7 +176,19 @@ const installDriver = ({ budgetMs, stallMs }) => {
 async function traverse(page, level, results) {
   const arena = await readArena(page);
   await forceLevel(page, level);
+  // The sleep matters, and so does asserting the result. `activeBoss()` returns
+  // null until the boss has been activated by the player entering the arena, so
+  // parking immediately after forceLevel silently does nothing. This test did
+  // neither at first and therefore ran all four levels with the boss live while
+  // its comments claimed the opposite. The arena test sleeps and asserts for the
+  // same reason.
+  await sleep(400);
   const parked = await parkBossOutside(page, arena);
+  results.check(
+    `L${level}: boss parked outside the arena, so this measures geometry not combat`,
+    !!parked && parked.x > arena.x1,
+    parked ? `boss x=${Math.round(parked.x)}, arena ends at ${arena.x1}` : "no boss to park"
+  );
 
   // forceLevel parks the player relative to the arena, which is the wrong end
   // of the map for this test. Put them at the real spawn, standing on whatever
@@ -218,34 +224,40 @@ async function traverse(page, level, results) {
   const secs = (out.ms / 1000).toFixed(1);
   const known = KNOWN_STALLS[level];
   const atKnown = known && Math.abs(out.maxX - known.x) <= STALL_TOLERANCE;
-  const ok = out.reached || atKnown;
+  // Level 4 has no portal at all (`updateGoal` returns early for it), so the
+  // only way to finish it is the boss, which sets scene="win". Reaching the goal
+  // x and winning are both success; the check must accept either, and the two
+  // race within a single tick.
+  const finished = out.scene === "win" || out.scene === "complete";
+  const ok = out.reached || finished || atKnown;
 
   results.check(
     `L${level}: crossed to the portal, or stalled only where already known`,
     ok,
     out.reached
       ? `reached the portal in ${secs}s, ${out.jumps} jumps, ${out.falls} falls`
-      : ok
-        ? `known stall at x=${Math.round(out.maxX)} (${known.why})`
-        : `NEW ${out.stalled ? "stall" : "timeout"} at x=${Math.round(out.maxX)} of ${out.goalX} after ${secs}s`
+      : finished
+        ? `finished the level (scene=${out.scene}) in ${secs}s`
+        : ok
+          ? `known stall at x=${Math.round(out.maxX)} (${known.why})`
+          : `NEW ${out.stalled ? "stall" : "timeout"} at x=${Math.round(out.maxX)} of ${out.goalX} after ${secs}s`
   );
-  if (out.reached) {
+  if (ok && !atKnown) {
     results.check(`L${level}: no stall on the way`, true, `${secs}s, ${out.jumps} jumps, ${out.falls} falls`);
-  } else {
+  } else if (!ok) {
     results.note(
-      `L${level}: ${out.jumps} jumps, ${out.falls} falls before stalling at x=${Math.round(out.maxX)}`
+      `L${level}: ${out.jumps} jumps, ${out.falls} falls before stopping at x=${Math.round(out.maxX)}`
     );
   }
   results.check(
-    `L${level}: the run does not end in a death or a scene change`,
-    out.scene === null,
+    `L${level}: the run never ends in a death`,
+    out.scene !== "gameover",
     `scene=${out.scene}`
   );
   results.note(
-    `L${level}: spawn x=${Math.round(start.x)} y=${Math.round(start.y)} on ${start.on}, ` +
-      `boss parked at ${parked ? Math.round(parked.x) : "n/a"}`
+    `L${level}: spawn x=${Math.round(start.x)} y=${Math.round(start.y)} on ${start.on}`
   );
-  return out;
+  return { ...out, ok };
 }
 
 export async function run({ browser, url, results: r }) {
@@ -258,11 +270,11 @@ export async function run({ browser, url, results: r }) {
   for (const level of levels) {
     outs.push({ level, out: await traverse(page, level, r) });
   }
-  const clean = outs.filter((o) => o.out.reached).map((o) => o.level);
-  const stalled = outs.filter((o) => !o.out.reached).map((o) => o.level);
+  const clean = outs.filter((o) => o.out.ok).map((o) => o.level);
+  const stalled = outs.filter((o) => !o.out.ok).map((o) => o.level);
   r.note(
-    `clean runs: ${clean.length ? clean.join(", ") : "none"}` +
-      (stalled.length ? ` | known stalls: ${stalled.join(", ")}` : "")
+    `crossed cleanly: ${clean.length ? clean.join(", ") : "none"}` +
+      (stalled.length ? ` | did not cross: ${stalled.join(", ")}` : "")
   );
   r.check("no console errors during the traversal runs", errors.length === 0, errors.slice(0, 3).join(" | "));
   return r.report();

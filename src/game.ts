@@ -482,7 +482,13 @@ export function initGame(
     add(1600, 340, 200, 36, 1, { move: { axis: "y", amp: 45, speed: 1.4, phase: 1 } });
     add(1900, 350, 200, 36, 2);
     add(2280, 336, 160, 36, 1);
-    add(2500, 290, 160, 36, 2);
+    // 140 wide, not 160. The block below runs to x=2700 and the platform at
+    // 2700 stops the player at x=2656, so 2656..2700 is the only place they can
+    // stand to make the 66px climb onto it. At 160 wide this ceiling reached
+    // x=2660 and covered that spot, and its underside at y=326 is exactly head
+    // height for a player on the block, so the rise there was 0px and the climb
+    // was impossible. Ending it at 2640 leaves the take-off in open air.
+    add(2500, 290, 140, 36, 2);
     add(2700, 330, 180, 36, 1);
     add(3100, 300, 220, 36, 2);
     add(3350, 340, 200, 36, 1, { move: { axis: "y", amp: 45, speed: 1.6 } });
@@ -503,7 +509,9 @@ export function initGame(
     addStars(1610, 285, 3);
     addStars(1910, 295, 4);
     addStars(2290, 280, 3);
-    addStars(2510, 235, 4);
+    // Gap tightened from the usual 54 to 42 so all four stars stay over the
+    // platform, which is now 140 wide rather than 160.
+    addStars(2500, 235, 4, 42);
     addStars(2710, 275, 3);
     addStars(3110, 245, 4);
     addStars(3360, 285, 3);
@@ -677,7 +685,13 @@ export function initGame(
     // instead of being at head height.
     add(3040, 340, 160, 36, 1);
     add(3300, 270, 140, 36, 1);
-    add(3500, 260, 140, 36, 1);
+    // Raised from y=260. The block below tops out at 396 and the platform at
+    // 3600 stops the player at x=3556, where they need 51px of rise to clear it.
+    // At y=260 the underside was 296, leaving 30px, so the climb failed. At 225
+    // the underside is 261 and the rise is 65px. Shortening it instead is not an
+    // option: it would have to end by x=3556 to clear the take-off, and at that
+    // width it would no longer hold its stars.
+    add(3500, 225, 140, 36, 1);
     add(3700, 190, 140, 36, 1);
     add(3900, 120, 140, 36, 1);
     add(3600, 345, 200, 36, 2);
