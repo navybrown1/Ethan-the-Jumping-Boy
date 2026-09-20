@@ -37,6 +37,11 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages and set its source to GitHub Actions if it is not
+          # already configured that way. Without this, the step 404s when the
+          # repo still serves Pages from a branch.
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
