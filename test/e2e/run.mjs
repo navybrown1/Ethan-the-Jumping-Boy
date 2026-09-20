@@ -1,9 +1,10 @@
 // End-to-end test runner.
 //
-//   npm run test:e2e                  everything (production smoke + arena + all four bosses)
+//   npm run test:e2e                  everything (production smoke + arena + bosses + perf)
 //   npm run test:e2e -- --only=prod   production bundle smoke test only
 //   npm run test:e2e -- --only=arena  arena runway geometry only
 //   npm run test:e2e -- --only=boss   no-powers boss verification only
+//   npm run test:e2e -- --only=perf   frame-time measurement only
 //   npm run test:e2e -- --levels=1,4  just two bosses
 //
 // The two phases need different servers. The arena and boss tests read the
@@ -16,6 +17,7 @@
 import { Results, ensureOut, launchBrowser, startDevServer, startProdServer } from "./harness.mjs";
 import * as arenaRunway from "./arena-runway.mjs";
 import * as bossNoPowers from "./boss-nopowers.mjs";
+import * as performance from "./performance.mjs";
 import * as prodSmoke from "./prod-smoke.mjs";
 
 const argv = process.argv.slice(2);
@@ -56,10 +58,11 @@ async function phase(label, startServer, modules) {
 
 try {
   if (want("prod")) await phase("production smoke", startProdServer, [prodSmoke]);
-  if (want("arena") || want("boss")) {
+  if (want("arena") || want("boss") || want("perf")) {
     const modules = [];
     if (want("arena")) modules.push(arenaRunway);
     if (want("boss")) modules.push(bossNoPowers);
+    if (want("perf")) modules.push(performance);
     await phase("gameplay (dev server)", startDevServer, modules);
   }
 } finally {

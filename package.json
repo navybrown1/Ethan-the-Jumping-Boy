@@ -14,7 +14,8 @@
     "test:e2e": "node test/e2e/run.mjs",
     "test:smoke": "node test/e2e/run.mjs --only=prod",
     "test:arena": "node test/e2e/arena-runway.mjs",
-    "test:boss": "node test/e2e/boss-nopowers.mjs"
+    "test:boss": "node test/e2e/boss-nopowers.mjs",
+    "test:perf": "node test/e2e/performance.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

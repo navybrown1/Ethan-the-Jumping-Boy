@@ -165,9 +165,14 @@ export async function run({ browser, url, results, outDir }) {
   );
 
   // ── 4. nothing may overhang the runway ──────────────────────────────────
+  // The player's height comes from the game. A hardcoded 70 was right here but
+  // it is the same class of mistake that let a harness keep passing against a
+  // constant the game had already moved on from.
+  const standH = await page.evaluate(() => window.__ethan.state.player.h);
+  const fullRise = Math.max(...rises.map((r) => r.rise));
   const overhangs = await page.evaluate(
-    ({ a, standH, rise }) => {
-      const headApex = a.floor - standH - rise;
+    ({ a, h, rise }) => {
+      const headApex = a.floor - h - rise;
       const out = [];
       for (const q of window.__ethan.state.platforms) {
         if (q.x + q.w < a.x0 || q.x > a.x1) continue;
@@ -178,7 +183,7 @@ export async function run({ browser, url, results, outDir }) {
       }
       return out;
     },
-    { a: arena, standH: 70, rise: 132 }
+    { a: arena, h: standH, rise: fullRise }
   );
   results.check("no platform overhangs the runway", overhangs.length === 0, overhangs.join(", "));
 
