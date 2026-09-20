@@ -1,13 +1,14 @@
 // End-to-end test runner.
 //
-//   npm run test:e2e                  everything (production smoke + arena + touch + audio + bosses + perf)
-//   npm run test:e2e -- --only=prod   production bundle smoke test only
-//   npm run test:e2e -- --only=arena  arena runway geometry only
-//   npm run test:e2e -- --only=touch  phone layout and touch input only
-//   npm run test:e2e -- --only=audio  audio gating, mixing and recovery only
-//   npm run test:e2e -- --only=boss   no-powers boss verification only
-//   npm run test:e2e -- --only=perf   frame-time measurement only
-//   npm run test:e2e -- --levels=1,4  just two bosses
+//   npm run test:e2e                    everything (production smoke + arena + touch + audio + traversal + bosses + perf)
+//   npm run test:e2e -- --only=prod     production bundle smoke test only
+//   npm run test:e2e -- --only=arena    arena runway geometry only
+//   npm run test:e2e -- --only=touch    phone layout and touch input only
+//   npm run test:e2e -- --only=audio    audio gating, mixing and recovery only
+//   npm run test:e2e -- --only=traverse level traversability only
+//   npm run test:e2e -- --only=boss     no-powers boss verification only
+//   npm run test:e2e -- --only=perf     frame-time measurement only
+//   npm run test:e2e -- --levels=1,4    just two bosses
 //
 // The two phases need different servers. The arena and boss tests read the
 // dev-only test hook, so they run against a Vite dev server with HMR off. The
@@ -23,6 +24,7 @@ import * as bossNoPowers from "./boss-nopowers.mjs";
 import * as performance from "./performance.mjs";
 import * as prodSmoke from "./prod-smoke.mjs";
 import * as touchInput from "./touch-input.mjs";
+import * as traversal from "./traversal.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -62,11 +64,19 @@ async function phase(label, startServer, modules) {
 
 try {
   if (want("prod")) await phase("production smoke", startProdServer, [prodSmoke]);
-  if (want("arena") || want("boss") || want("perf") || want("touch") || want("audio")) {
+  if (
+    want("arena") ||
+    want("boss") ||
+    want("perf") ||
+    want("touch") ||
+    want("audio") ||
+    want("traverse")
+  ) {
     const modules = [];
     if (want("arena")) modules.push(arenaRunway);
     if (want("touch")) modules.push(touchInput);
     if (want("audio")) modules.push(audio);
+    if (want("traverse")) modules.push(traversal);
     if (want("boss")) modules.push(bossNoPowers);
     if (want("perf")) modules.push(performance);
     await phase("gameplay (dev server)", startDevServer, modules);

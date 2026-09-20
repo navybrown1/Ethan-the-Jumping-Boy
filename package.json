@@ -17,7 +17,8 @@
     "test:boss": "node test/e2e/boss-nopowers.mjs",
     "test:perf": "node test/e2e/performance.mjs",
     "test:touch": "node test/e2e/touch-input.mjs",
-    "test:audio": "node test/e2e/audio.mjs"
+    "test:audio": "node test/e2e/audio.mjs",
+    "test:traverse": "node test/e2e/traversal.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

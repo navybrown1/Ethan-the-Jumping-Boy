@@ -468,7 +468,14 @@ export function initGame(
     add(4680, 456, 440);
 
     add(300, 300, 140, 36, 1);
-    add(520, 340, 200, 36, 2);
+    // Width is 170, not 200. At 200 this ran to x=720, and the 16px step at
+    // x=760 stops the player at x=716, which is under it. The underside sits at
+    // y=376, only 80px above a floor at 456, and the player is 70px tall, so a
+    // jump there rose 10px instead of 132. The step needed 16. The player could
+    // not get past and had to walk 250px back to the 40px-wide window at
+    // x=420..460 to jump clear. Ending the platform at 690 leaves the stop
+    // position in open air, so the step is a step again rather than a trap.
+    add(520, 340, 170, 36, 2);
     add(760, 440, 64, 16, 4);
     add(980, 340, 220, 36, 1);
     add(1300, 285, 200, 36, 2);
@@ -660,8 +667,16 @@ export function initGame(
     add(2050, 340, 160, 36, 1);
     add(2450, 320, 200, 36, 2);
     add(2700, 300, 200, 36, 2, { move: { axis: "x", amp: 160, speed: 1.3, phase: 1, minX: 2520, maxX: 2900 } });
-    add(3200, 340, 180, 36, 1);
-    add(3300, 330, 140, 36, 1);
+    // These two used to be add(3200, 340, 180) and add(3300, 330, 140). They
+    // intersected each other across x=3300..3380, and the first hung its
+    // underside 80px above the floor at 456 exactly where the player has to
+    // climb the 60px block at x=3260. A 70px player under an 80px ceiling gets
+    // 10px of jump, so that block was unclimbable and the run dead-ended at
+    // x=3216. The first is now over flat floor with nothing beneath it to
+    // climb, and the second is raised so the block's own top is walkable
+    // instead of being at head height.
+    add(3040, 340, 160, 36, 1);
+    add(3300, 270, 140, 36, 1);
     add(3500, 260, 140, 36, 1);
     add(3700, 190, 140, 36, 1);
     add(3900, 120, 140, 36, 1);
@@ -682,7 +697,11 @@ export function initGame(
     addStars(2060, 285, 3);
     addStars(2460, 265, 4);
     addStars(2710, 245, 3);
-    addStars(3210, 285, 4);
+    // Was addStars(3210, 285, 4), which no longer lines up with the two
+    // platforms it belongs to. Split rather than moved so the level keeps the
+    // same number of stars, since the rating is a proportion of the total.
+    addStars(3040, 285, 2);
+    addStars(3310, 215, 2);
     addStars(3610, 265, 3);
     addStars(3920, 75, 5);
     addStars(4110, 285, 4);
