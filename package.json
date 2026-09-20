@@ -16,7 +16,8 @@
     "test:arena": "node test/e2e/arena-runway.mjs",
     "test:boss": "node test/e2e/boss-nopowers.mjs",
     "test:perf": "node test/e2e/performance.mjs",
-    "test:touch": "node test/e2e/touch-input.mjs"
+    "test:touch": "node test/e2e/touch-input.mjs",
+    "test:audio": "node test/e2e/audio.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

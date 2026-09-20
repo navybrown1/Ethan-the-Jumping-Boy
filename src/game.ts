@@ -181,7 +181,9 @@ export function initGame(
   let last = performance.now();
   let frameTime = 0;
   let audio: AudioContext | null = null;
-  let mutedBecauseNoGesture = true;
+  // Counts every AudioContext this instance has constructed. Chrome allows only a
+  // handful per page, so a remount that leaks one is worth catching in a test.
+  let audioContexts = 0;
   let musicTempo = 125;
   let musicRoot = 1;
 
@@ -293,12 +295,32 @@ export function initGame(
     return { x: rect.x + rect.w * 0.5, y: rect.y + rect.h * 0.5 };
   }
 
+  // True only once there is a context that can actually produce sound. Every
+  // sound path in this file returns early while the context reads "suspended",
+  // so a context that merely exists is not the same as audio being ready. This
+  // is what the on-screen hint keys off, which is why it is derived rather than
+  // latched: a latched flag claimed sound was enabled while it was not.
+  function audioReady() {
+    return !!audio && audio.state === "running";
+  }
+
   function initAudio() {
-    if (audio) return;
+    if (audio) {
+      // Recover a context that the browser or the OS suspended. Without this
+      // the game goes permanently mute: nothing else ever creates or resumes a
+      // context, and every sound path bails while it reads "suspended". This
+      // runs on every keydown and every on-screen button press, and on every
+      // pointerdown, so any gesture at all is enough to bring sound back.
+      if (audio.state === "suspended") audio.resume().catch(() => { /* ignored */ });
+      return;
+    }
     const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtor) return;
     audio = new AudioCtor();
-    mutedBecauseNoGesture = false;
+    audioContexts++;
+    // Chrome starts a context created inside a gesture running, but that is a
+    // behaviour, not a guarantee, and it is not what every browser does.
+    if (audio.state === "suspended") audio.resume().catch(() => { /* ignored */ });
   }
 
   function tone(freq: number, duration: number, type: OscillatorType = "sine", gain = 0.035, slide = 1) {
@@ -3356,11 +3378,13 @@ export function initGame(
     ctx.restore();
   }
 
-  // Audio stays muted until the first user gesture (browser autoplay policy).
-  // Drawn outside drawHud so it also appears on the title and menu screens, where
-  // a player is most likely to wonder why there is no sound.
+  // Shown until the context is actually running, not merely constructed, so it
+  // reappears if the browser suspends audio later and the player can act on it.
+  // Drawn outside drawHud so it also appears on the title and menu screens,
+  // where a player is most likely to wonder why there is no sound. A deliberate
+  // mute needs no hint.
   function drawAudioHint() {
-    if (!mutedBecauseNoGesture || scene === "loading") return;
+    if (audioReady() || settings.muted || scene === "loading") return;
     const narrow = uiScale > 1.25;
     ctx.save();
     ctx.textAlign = "center";
@@ -3809,7 +3833,12 @@ export function initGame(
   window.addEventListener("keyup", handleKeyUp, { passive: false });
   canvas.addEventListener("pointerdown", onCanvasPointerDown);
   const onPointerDownAudio = () => initAudio();
-  window.addEventListener("pointerdown", onPointerDownAudio, { once: true });
+  // Deliberately not `{ once: true }`. The on-screen hint promises "tap anywhere
+  // to enable sound", and a one-shot listener would make that promise false the
+  // second time it appeared, which is exactly the case where audio has been
+  // suspended and the player is being asked to bring it back. initAudio is an
+  // early return plus a state comparison, so this costs nothing per tap.
+  window.addEventListener("pointerdown", onPointerDownAudio);
   const autoPause = () => {
     if (scene === "playing" && !state.paused && state.player && !state.player.dead) state.paused = true;
   };
@@ -3966,6 +3995,28 @@ export function initGame(
       get prog() {
         return prog;
       },
+      // Audio introspection. `state` is the AudioContext's own state, which is
+      // the thing that actually decides whether a note is audible: every sound
+      // path in this file returns early while it reads "suspended". `contexts`
+      // counts constructions, so a remount that leaks a context is visible.
+      get audio() {
+        return {
+          contexts: audioContexts,
+          state: audio ? audio.state : null,
+          gated: !audioReady(),
+          muted: settings.muted,
+        };
+      },
+      get sfxNames() {
+        return Object.keys(sfx);
+      },
+      // Fires one named sound effect, so a test can prove every entry in the
+      // table actually produces sound instead of trusting that it does.
+      playSfx(name: string) {
+        const fn = (sfx as any)[name];
+        if (typeof fn !== "function") throw new Error(`no such sfx: ${name}`);
+        fn();
+      },
     };
   }
 
@@ -3980,6 +4031,12 @@ export function initGame(
     document.removeEventListener("visibilitychange", onVisibility);
     window.removeEventListener("resize", onResize);
     if (resizeObserver) resizeObserver.disconnect();
+    // Release the audio context. React's dev StrictMode mounts, unmounts and
+    // remounts this effect, and Chrome caps how many contexts a page may hold,
+    // so this is a real leak rather than a theoretical one. Each instance owns
+    // its own context, so closing this one cannot silence a surviving instance:
+    // that instance builds a fresh one on the next gesture.
+    if (audio && audio.state !== "closed") audio.close().catch(() => { /* ignored */ });
     cleanupLeft && cleanupLeft();
     cleanupRight && cleanupRight();
     cleanupCrouch && cleanupCrouch();
