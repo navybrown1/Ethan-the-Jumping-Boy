@@ -30,20 +30,6 @@ function springSheetAsset() {
   return svgAsset(192, 64, frames.join(""));
 }
 
-function bossSheetAsset() {
-  const spike = `<path d="M0 -56 L 6 -44 L 20 -48 L 14 -36 L 28 -34 L 18 -24 L 30 -16 L 18 -12 L 26 2 L 14 -2 L 16 12 L 4 4 L 0 16 L -4 4 L -16 12 L -14 -2 L -26 2 L -18 -12 L -30 -16 L -18 -24 L -28 -34 L -14 -36 L -20 -48 L -6 -44 Z" fill="#ff9d2e" stroke="#c96a1a" stroke-width="3" stroke-linejoin="round"/>`;
-  const body = (angry: boolean, rot: number) => {
-    const face = angry
-      ? `<circle cx="-12" cy="0" r="4.5" fill="#fff"/><circle cx="12" cy="0" r="4.5" fill="#fff"/><circle cx="-12" cy="0" r="2.2" fill="#7a0c0c"/><circle cx="12" cy="0" r="2.2" fill="#7a0c0c"/><path d="M-17 -8 L -8 -2 M17 -8 L 8 -2" stroke="#7a0c0c" stroke-width="3" stroke-linecap="round"/><path d="M-10 12 Q 0 24 10 12 L 6 20 L -6 20 Z" fill="#8c1b1b"/>`
-      : `<circle cx="-12" cy="2" r="4.5" fill="#111"/><circle cx="12" cy="2" r="4.5" fill="#111"/><path d="M-9 14 Q 0 21 9 14" stroke="#8a4a00" stroke-width="3.5" fill="none"/>`;
-    return `<ellipse cx="0" cy="52" rx="48" ry="11" fill="#000" opacity="0.3"/><g transform="rotate(${rot} 0 4)">${spike}</g><circle cx="0" cy="4" r="34" fill="${angry ? "#ff6b3a" : "#ffb12b"}"/><rect x="-17" y="-34" width="34" height="10" rx="3" fill="#ffd76a"/><path d="M-17 -34 L -12 -46 L -4 -36 L 0 -50 L 4 -36 L 12 -46 L 17 -34 Z" fill="#ffd76a"/>${face}`;
-  };
-  let out = "";
-  for (let i = 0; i < 4; i++) out += `<g transform="translate(${i * 128}, 64)">${body(false, [0, 10, -6, 18][i])}</g>`;
-  for (let i = 0; i < 4; i++) out += `<g transform="translate(${i * 128}, 192)">${body(true, [0, 12, -8, 20][i])}</g>`;
-  return svgAsset(512, 256, out);
-}
-
 function lightningSheetAsset() {
   const bolt = (p: string) => `<path d="${p}" fill="#fff8c4" stroke="#ffd76a" stroke-width="3" stroke-linejoin="round"/>`;
   return svgAsset(360, 260,
@@ -729,6 +715,5 @@ export const assetList: Record<string, string> = {
   "powerups": svgAsset(192, 48, `<g transform="translate(24,24)"><circle cx="0" cy="6" r="16" fill="#000" opacity="0.25"/><rect x="-10" y="2" width="20" height="13" rx="5" fill="#f3d9b1"/><path d="M-16 0 Q 0 -17 16 0 Z" fill="#ff4747"/><circle cx="-7" cy="-7" r="3" fill="#fff"/><circle cx="6" cy="-9" r="3" fill="#fff"/><circle cx="0" cy="-3" r="2.4" fill="#fff"/><circle cx="-5" cy="3" r="2" fill="#111"/><circle cx="5" cy="3" r="2" fill="#111"/><path d="M-4 7 Q0 10 4 7" stroke="#111" stroke-width="1.5" fill="none"/></g><g transform="translate(72,24)"><circle r="17" fill="#ffe066" opacity="0.35"/><polygon points="0,-15 4.4,-4.6 15.5,-3.6 7,3.6 9.6,14.3 0,8.4 -9.6,14.3 -7,3.6 -15.5,-3.6 -4.4,-4.6" fill="#ffdf30" stroke="#cc8e00" stroke-width="2" stroke-linejoin="round"/><circle cx="-5" cy="-1" r="2.2" fill="#111"/><circle cx="5" cy="-1" r="2.2" fill="#111"/><path d="M-3 4 Q0 7 3 4" stroke="#111" stroke-width="1.5" fill="none"/></g><g transform="translate(120,24)"><circle cx="0" cy="5" r="8" fill="#fff3d6"/><circle cx="0" cy="-8" r="6.5" fill="#ff8c3a"/><circle cx="0" cy="8" r="6.5" fill="#ff8c3a"/><circle cx="-8" cy="0" r="6.5" fill="#ff8c3a"/><circle cx="8" cy="0" r="6.5" fill="#ff8c3a"/><circle cx="-6" cy="-6" r="6.5" fill="#ff8c3a"/><circle cx="6" cy="-6" r="6.5" fill="#ff8c3a"/><circle cx="-6" cy="6" r="6.5" fill="#ff8c3a"/><circle cx="6" cy="6" r="6.5" fill="#ff8c3a"/><circle cx="-3.5" cy="4" r="2" fill="#111"/><circle cx="3.5" cy="4" r="2" fill="#111"/><path d="M-2 8 Q0 10 2 8" stroke="#111" stroke-width="1.5" fill="none"/></g>`),
   "spring": springSheetAsset(),
   "stalactite": svgAsset(160, 100, `<g transform="translate(40,0)"><path d="M6 0 L34 0 L30 44 Q 26 62 20 70 Q 18 74 16 76 L 12 66 Q 8 52 6 0 Z" fill="#bfefff" opacity="0.95"/><path d="M14 4 L 20 34 L 24 10 Z" fill="#e8fbff" opacity="0.85"/><path d="M8 12 L 12 26" stroke="#8fd0e8" stroke-width="2" opacity="0.7"/></g><g transform="translate(120,0)"><path d="M6 0 L34 0 L30 44 Q 26 62 20 70 Q 18 74 16 76 L 12 66 Q 8 52 6 0 Z" fill="#a8dff0" opacity="0.95"/><path d="M14 4 L 20 34 L 24 10 Z" fill="#d6f4ff" opacity="0.85"/><path d="M14 40 L 20 48 M 20 48 L 18 58" stroke="#5aa8c4" stroke-width="2.5" fill="none"/><path d="M10 22 L 16 30" stroke="#5aa8c4" stroke-width="2" fill="none"/></g>`),
-  "lightning": lightningSheetAsset(),
-  "boss": bossSheetAsset()
+  "lightning": lightningSheetAsset()
 };
