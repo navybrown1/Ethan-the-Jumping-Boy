@@ -16,7 +16,7 @@
 // there is no child process to leak and no port to guess.
 
 import { build, createServer, preview } from "vite";
-import { chromium, firefox } from "playwright-core";
+import { chromium, firefox, webkit } from "playwright-core";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -142,13 +142,19 @@ const LAUNCH_ARGS = [
  *     before assuming a cached engine is usable.
  */
 export async function launchBrowser(engine = process.env.BROWSER_ENGINE || "chrome") {
-  if (engine === "firefox") {
+  // Both of these are playwright-managed downloads, not system installs.
+  const managed = {
+    firefox: [firefox, "Firefox"],
+    webkit: [webkit, "WebKit"],
+  };
+  if (managed[engine]) {
+    const [type, label] = managed[engine];
     try {
-      return await firefox.launch();
+      return await type.launch();
     } catch (err) {
       throw new Error(
-        "Could not launch Firefox. It is a playwright-managed download, not a " +
-          "system install, so run: npx playwright-core install firefox\n" +
+        `Could not launch ${label}. It is a playwright-managed download, not a ` +
+          `system install, so run: npx playwright-core install ${engine}\n` +
           `Underlying error: ${err.message}`
       );
     }

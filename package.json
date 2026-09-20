@@ -21,7 +21,8 @@
     "test:audio": "node test/e2e/audio.mjs",
     "test:traverse": "node test/e2e/traversal.mjs",
     "test:flash": "node test/e2e/photosensitivity.mjs",
-    "test:xbrowser": "node test/e2e/cross-browser.mjs"
+    "test:xbrowser": "node test/e2e/cross-browser.mjs",
+    "test:xbrowser:all": "node test/e2e/cross-browser.mjs --all"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

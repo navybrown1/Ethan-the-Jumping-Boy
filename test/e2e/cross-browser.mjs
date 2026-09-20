@@ -16,10 +16,18 @@
 // test rather than a second copy of the Chrome suite. Run it with:
 //
 //   BROWSER_ENGINE=firefox npm run test:xbrowser
+//   BROWSER_ENGINE=webkit  npm run test:xbrowser
 //
-// Firefox is a playwright-managed download, so `npx playwright-core install
-// firefox` is needed once. A cached build from a different playwright version
-// will not work even if it launches.
+// Both are playwright-managed downloads, so `npx playwright-core install
+// firefox webkit` is needed once. A cached build from a different playwright
+// version will not work even if it launches.
+//
+// WHAT WEBKIT HERE IS NOT. This is playwright's WebKit port for Windows, not
+// Safari. It has no Web Audio API (verified by probe: AudioContext,
+// webkitAudioContext and OfflineAudioContext are all undefined), so it can say
+// nothing about audio on Safari or iOS. Passing on this engine is evidence
+// about canvas, layout, events and storage on a Blink/Gecko alternative, and
+// about nothing else. Do not read it as iOS coverage.
 
 import { isMain, openGame, runStandalone, forceLevel, parkBossOutside, readArena, sleep } from "./harness.mjs";
 
@@ -122,11 +130,39 @@ export async function run({ browser, url, results }) {
 
   // Audio. Firefox and Chrome disagree about autoplay policy, so this is the
   // check most likely to differ between engines.
+  //
+  // It is conditional because playwright's WebKit build on Windows exposes no
+  // Web Audio API at all: AudioContext, webkitAudioContext and
+  // OfflineAudioContext are all undefined, verified by direct probe. That is a
+  // property of that port, not of Safari and not of this game, so asserting on
+  // it would be reporting a failure the game cannot cause. What is worth
+  // asserting there is the opposite: the game still runs with no Web Audio.
+  //
+  // The consequence is that this test says NOTHING about audio on Safari or
+  // iOS. Real Safari has had Web Audio for years, but this build cannot stand
+  // in for it, so iOS audio stays unverified.
+  const hasWebAudio = await page.evaluate(
+    () => typeof (window.AudioContext || window.webkitAudioContext) === "function"
+  );
   await page.keyboard.press("ArrowRight");
   await sleep(600);
   const audio = await page.evaluate(() => window.__ethan.audio);
-  results.check(`${engine}: a gesture brings the audio context up`, audio.state === "running",
-    `state=${audio.state} contexts=${audio.contexts} gated=${audio.gated}`);
+  if (hasWebAudio) {
+    results.check(`${engine}: a gesture brings the audio context up`, audio.state === "running",
+      `state=${audio.state} contexts=${audio.contexts} gated=${audio.gated}`);
+  } else {
+    results.note(`${engine}: this build exposes no Web Audio API, so the audio path cannot be exercised here`);
+    const alive = await page.evaluate(() => ({
+      drawing: !!document.querySelector("canvas"),
+      scene: window.__ethan.scene,
+      x: window.__ethan.state.player.x,
+    }));
+    results.check(
+      `${engine}: the game runs normally on a platform with no Web Audio`,
+      alive.drawing && audio.contexts === 0,
+      `scene=${alive.scene} x=${Math.round(alive.x)} contexts=${audio.contexts}`
+    );
+  }
 
   // Save round trip, then corruption. Both go through localStorage, which
   // every engine implements slightly differently.
@@ -161,5 +197,20 @@ export async function run({ browser, url, results }) {
 }
 
 if (isMain(import.meta.url)) {
-  await runStandalone(run, { label: "cross-engine smoke", engine: process.env.BROWSER_ENGINE || "firefox" });
+  // `--all` exists as a flag rather than only an env var so the npm script does
+  // not need cross-env to work on Windows.
+  const engine = process.argv.includes("--all") ? "all" : process.env.BROWSER_ENGINE || "firefox";
+  if (engine === "all") {
+    // One command for the whole matrix. Each engine gets its own server and
+    // browser, so a crash in one cannot mask the others.
+    let ok = true;
+    for (const e of ["chrome", "firefox", "webkit"]) {
+      console.log(`\n${"=".repeat(64)}`);
+      const passed = await runStandalone(run, { label: "cross-engine smoke", engine: e });
+      ok = passed && ok;
+    }
+    process.exitCode = ok ? 0 : 1;
+  } else {
+    await runStandalone(run, { label: "cross-engine smoke", engine });
+  }
 }
