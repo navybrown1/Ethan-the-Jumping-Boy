@@ -9,7 +9,12 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:logic": "tsx --test test/logic.test.ts"
+    "test": "npm run lint && npm run test:logic",
+    "test:logic": "tsx --test test/logic.test.ts",
+    "test:e2e": "node test/e2e/run.mjs",
+    "test:smoke": "node test/e2e/run.mjs --only=prod",
+    "test:arena": "node test/e2e/arena-runway.mjs",
+    "test:boss": "node test/e2e/boss-nopowers.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -21,8 +26,9 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
