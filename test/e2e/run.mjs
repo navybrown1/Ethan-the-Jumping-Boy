@@ -8,6 +8,7 @@
 //   npm run test:e2e -- --only=audio    audio gating, mixing and recovery only
 //   npm run test:e2e -- --only=traverse level traversability only
 //   npm run test:e2e -- --only=flash    photosensitivity (WCAG 2.3.1 flash rate) only
+//   npm run test:e2e -- --only=motion   reduced-motion differential only
 //   npm run test:e2e -- --only=boss     no-powers boss verification only
 //   npm run test:e2e -- --only=perf     frame-time measurement only
 //   npm run test:e2e -- --levels=1,4    just two bosses
@@ -34,6 +35,7 @@ import * as bossNoPowers from "./boss-nopowers.mjs";
 import * as performance from "./performance.mjs";
 import * as photosensitivity from "./photosensitivity.mjs";
 import * as prodSmoke from "./prod-smoke.mjs";
+import * as reducedMotion from "./reduced-motion.mjs";
 import * as subpath from "./subpath.mjs";
 import * as touchInput from "./touch-input.mjs";
 import * as traversal from "./traversal.mjs";
@@ -90,7 +92,8 @@ try {
     want("touch") ||
     want("audio") ||
     want("traverse") ||
-    want("flash")
+    want("flash") ||
+    want("motion")
   ) {
     const modules = [];
     if (want("arena")) modules.push(arenaRunway);
@@ -98,6 +101,7 @@ try {
     if (want("audio")) modules.push(audio);
     if (want("traverse")) modules.push(traversal);
     if (want("flash")) modules.push(photosensitivity);
+    if (want("motion")) modules.push(reducedMotion);
     if (want("boss")) modules.push(bossNoPowers);
     if (want("perf")) modules.push(performance);
     await phase("gameplay (dev server)", startDevServer, modules);

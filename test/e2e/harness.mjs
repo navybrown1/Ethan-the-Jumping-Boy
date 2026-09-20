@@ -177,12 +177,16 @@ export async function launchBrowser(engine = process.env.BROWSER_ENGINE || "chro
  * have it, so the production smoke test passes false.
  */
 export async function openGame(browser, url, opts = {}) {
-  const { viewport, hasTouch, isMobile, deviceScaleFactor, requireHook = true, initScript, onPage } = opts;
+  const { viewport, hasTouch, isMobile, deviceScaleFactor, requireHook = true, initScript, onPage, reducedMotion } = opts;
   const page = await browser.newPage({
     viewport: viewport || { width: 1280, height: 800 },
     ...(hasTouch ? { hasTouch: true } : {}),
     ...(isMobile ? { isMobile: true } : {}),
     ...(deviceScaleFactor ? { deviceScaleFactor } : {}),
+    // Set on the page rather than by calling emulateMedia afterwards, because
+    // the game reads matchMedia once at init. Emulating after load would change
+    // what the page reports without changing what the game already decided.
+    ...(reducedMotion ? { reducedMotion } : {}),
   });
   const errors = [];
   page.on("console", (m) => {
