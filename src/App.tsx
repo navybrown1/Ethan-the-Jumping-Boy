@@ -35,7 +35,10 @@ export default function App() {
           <p className="eyebrow">Original browser platformer</p>
           <h1>Ethan the Jumping Boy</h1>
         </div>
-        <p className="hint">Move with A/D, crouch with S, jump with Space/W. Grab a Fire Flower, then shoot with F/J or FIRE. R restarts your current checkpoint. P pauses, M toggles sound.</p>
+        {/* Two legends, one per input type. The keyboard text is useless on a
+            phone and the touch text is useless on a desktop, so CSS picks. */}
+        <p className="hint hint-keyboard">Move with A/D, crouch with S, jump with Space/W. Grab a Fire Flower, then shoot with F/J or FIRE. R restarts your current checkpoint. P pauses, M toggles sound.</p>
+        <p className="hint hint-touch">Use the buttons below: ◀ ▶ to move, ▼ to crouch, Jump to jump. Grab a Fire Flower to unlock Fire. Tap the game once to start sound.</p>
       </section>
 
       <div className="game-wrap">

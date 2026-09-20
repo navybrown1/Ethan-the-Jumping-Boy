@@ -3451,13 +3451,19 @@ export function initGame(
       titleText(
         "Ethan the Jumping Boy",
         "Four worlds of platforming, collect stars, stomp enemies, beat the King Roller.",
-        "Arrows select level · Enter to start",
+        // Naming keys a touch player does not have is the fastest way to make a
+        // game feel broken. The cards are tappable (onCanvasPointerDown), so say
+        // so instead.
+        coarsePointer ? "Tap a level to play" : "Arrows select level · Enter to start",
         uiScale > 1.25 ? undefined : { title: 0.175, sub: 0.2875, prompt: 0.8375 }
       );
       drawLevelSelect();
       drawMiniControls();
     } else if (scene === "gameover") {
-      titleText("Game Over", `Score ${state.score} · Best ${prog.bestScore || 0}`, `Press Enter to retry Level ${state.checkpointLevel} from your checkpoint score`);
+      titleText("Game Over", `Score ${state.score} · Best ${prog.bestScore || 0}`,
+        coarsePointer
+          ? `Tap Jump to retry Level ${state.checkpointLevel}`
+          : `Press Enter to retry Level ${state.checkpointLevel} from your checkpoint score`);
     } else if (scene === "complete") {
       const r = computeRating();
       const starsText = "★".repeat(r) + "☆".repeat(3 - r);
@@ -3465,7 +3471,9 @@ export function initGame(
       titleText(
         `Level ${state.currentLevel} Complete!`,
         `Score ${state.score} · Stars ${state.stars}/${state.starsList.length} · Time ${Math.floor(state.time)}s`,
-        last ? "Press Enter to see your final score" : `Press Enter for Level ${state.currentLevel + 1}`
+        coarsePointer
+          ? (last ? "Tap Jump to see your final score" : `Tap Jump for Level ${state.currentLevel + 1}`)
+          : (last ? "Press Enter to see your final score" : `Press Enter for Level ${state.currentLevel + 1}`)
       );
       ctx.fillStyle = "#ffd76a";
       fitFont(starsText, 900, 30 * u, VIEW_W - 80);
@@ -3474,7 +3482,7 @@ export function initGame(
       titleText(
         "You Win!",
         `The King Roller has been defeated! Final Score: ${state.score}`,
-        "Press Enter to play again"
+        coarsePointer ? "Tap Jump to play again" : "Press Enter to play again"
       );
       ctx.fillStyle = "#ffd76a";
       const lines = [1, 2, 3, 4].map(i => {
@@ -3492,15 +3500,15 @@ export function initGame(
     ctx.restore();
   }
 
-  function drawLevelSelect() {
-    const u = uiScale;
-    const narrow = u > 1.25;
-    const unlocked = prog.unlocked || 1;
-    const names = ["Rainbow Grove", "Sunset Cliffs", "Crystal Caves", "Storm Summit"];
-
+  // Geometry for the four level cards, in logical canvas units.
+  //
+  // Extracted so the renderer and the touch hit-test cannot disagree about where
+  // a card is. Duplicating this arithmetic is exactly how a tap target ends up
+  // 40px away from the thing it draws.
+  function levelCardRects() {
+    const narrow = uiScale > 1.25;
     // Phones get a 2x2 grid: at uiScale ~2 four 128px cards cannot hold the
-    // enlarged names, so each card gets roughly twice the width instead. The
-    // grid starts below the wrapped subtitle and ends above the prompt.
+    // enlarged names, so each card gets roughly twice the width instead.
     const cw = narrow ? 300 : 128;
     const ch = narrow ? 108 : 130;
     const gx = narrow ? 24 : 22;
@@ -3510,16 +3518,37 @@ export function initGame(
     // Wide sits below the subtitle (which wraps to two lines ending ~y210) and
     // above the prompt at y405. The original y208 collided with the subtitle.
     const y0 = narrow ? 210 : 240;
+    const out: { level: number; x: number; y: number; w: number; h: number }[] = [];
+    for (let i = 0; i < 4; i++) {
+      out.push({
+        level: i + 1,
+        x: x0 + (i % cols) * (cw + gx),
+        y: y0 + Math.floor(i / cols) * (ch + gy),
+        w: cw,
+        h: ch
+      });
+    }
+    return out;
+  }
+
+  function drawLevelSelect() {
+    const u = uiScale;
+    const unlocked = prog.unlocked || 1;
+    const names = ["Rainbow Grove", "Sunset Cliffs", "Crystal Caves", "Storm Summit"];
+
+    const ch = uiScale > 1.25 ? 108 : 130;
     // Cap the type by the card height so the enlarged sizes cannot overrun it.
     const fLevel = Math.min(20 * u, ch * 0.34);
     const fName = Math.min(15 * u, ch * 0.28);
     const fStars = Math.min(18 * u, ch * 0.32);
 
-    for (let i = 0; i < 4; i++) {
-      const cx = x0 + (i % cols) * (cw + gx) + cw / 2;
-      const cy = y0 + Math.floor(i / cols) * (ch + gy);
-      const isUnlocked = i + 1 <= unlocked;
-      const isSelected = state.selectLevel === i + 1;
+    for (const card of levelCardRects()) {
+      const i = card.level - 1;
+      const cw = card.w;
+      const cx = card.x + cw / 2;
+      const cy = card.y;
+      const isUnlocked = card.level <= unlocked;
+      const isSelected = state.selectLevel === card.level;
 
       ctx.fillStyle = isSelected ? "rgba(157,245,255,0.28)" : "rgba(255,255,255,0.08)";
       roundRect(ctx, cx - cw / 2, cy, cw, ch, 18);
@@ -3591,9 +3620,10 @@ export function initGame(
   }
 
   function drawMiniControls() {
-    // Keyboard hints are useless on a phone, where the on-screen buttons are the
-    // affordance, and at uiScale > 1.25 there is no room left for two more lines.
-    if (uiScale > 1.25) return;
+    // Two independent reasons to skip this. On a touch device the keyboard hints
+    // are not merely redundant, they are wrong: there is no keyboard. And at
+    // uiScale > 1.25 the level cards have taken the space these two lines need.
+    if (coarsePointer || uiScale > 1.25) return;
     ctx.fillStyle = "rgba(255,255,255,0.82)";
     const a = "Move: A/D or arrows · Jump: Space/W/Up · Crouch: S/Down";
     const b = "Fireball: F/J · Restart: R · Pause: P · Sound: M";
@@ -3747,8 +3777,37 @@ export function initGame(
     rafId = requestAnimationFrame(loop);
   }
 
+  // Tap a level card to play it.
+  //
+  // Without this a touch player can only ever start whichever level happens to
+  // be selected, because the keyboard is the only thing that moves
+  // `state.selectLevel` and the game offers no other affordance for choosing.
+  // The canvas is a fixed 960x540 world scaled into its CSS box, so mapping a tap
+  // back to world units is a straight scale, not a devicePixelRatio conversion:
+  // the DPR only affects the backing store, which this never touches.
+  function onCanvasPointerDown(e: PointerEvent) {
+    if (scene !== "title") return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const lx = ((e.clientX - rect.left) / rect.width) * VIEW_W;
+    const ly = ((e.clientY - rect.top) / rect.height) * VIEW_H;
+    const unlocked = prog.unlocked || 1;
+    for (const card of levelCardRects()) {
+      if (lx < card.x || lx > card.x + card.w) continue;
+      if (ly < card.y || ly > card.y + card.h) continue;
+      // A locked card does nothing. Quietly starting level 1 instead would be a
+      // worse answer than no response at all.
+      if (card.level > unlocked) return;
+      state.selectLevel = card.level;
+      initAudio();
+      startGame();
+      return;
+    }
+  }
+
   window.addEventListener("keydown", handleKeyDown, { passive: false });
   window.addEventListener("keyup", handleKeyUp, { passive: false });
+  canvas.addEventListener("pointerdown", onCanvasPointerDown);
   const onPointerDownAudio = () => initAudio();
   window.addEventListener("pointerdown", onPointerDownAudio, { once: true });
   const autoPause = () => {
@@ -3887,6 +3946,21 @@ export function initGame(
       get scene() {
         return scene;
       },
+      // Logical canvas size and the level-card rects in those units, so a test
+      // can map a tap to a card using the same geometry the renderer used
+      // instead of recomputing it and drifting.
+      get viewW() {
+        return VIEW_W;
+      },
+      get viewH() {
+        return VIEW_H;
+      },
+      get levelCards() {
+        return levelCardRects();
+      },
+      get coarsePointer() {
+        return coarsePointer;
+      },
       // Saved progression, so an automated run can unlock a level directly
       // instead of having to play through the three before it.
       get prog() {
@@ -3900,6 +3974,7 @@ export function initGame(
     cancelAnimationFrame(rafId);
     window.removeEventListener("keydown", handleKeyDown);
     window.removeEventListener("keyup", handleKeyUp);
+    canvas.removeEventListener("pointerdown", onCanvasPointerDown);
     window.removeEventListener("pointerdown", onPointerDownAudio);
     window.removeEventListener("blur", autoPause);
     document.removeEventListener("visibilitychange", onVisibility);
