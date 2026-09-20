@@ -8,7 +8,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background-color: #1e1b4b;
+  background: radial-gradient(ellipse at 50% 0%, #203e49 0%, #0a1b25 65%);
   color: #fff;
   font-family: ui-sans-serif, system-ui, sans-serif;
   overflow-x: hidden;
@@ -19,7 +19,7 @@ body {
 .shell {
   width: min(1024px, 100vw);
   margin: 0 auto;
-  padding: 32px 32px;
+  padding: 28px 32px;
   display: flex;
   flex-direction: column;
 }
@@ -30,11 +30,11 @@ body {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
-  background-color: rgba(49, 46, 129, 0.5);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(129, 140, 248, 0.2);
-  padding: 16px 24px;
-  border-radius: 24px;
+  background: transparent;
+
+  border-bottom: 1px solid #34505a;
+  padding: 8px 0 24px;
+  border-radius: 0;
 }
 
 h1 {
@@ -43,14 +43,13 @@ h1 {
   line-height: 1;
   letter-spacing: -0.05em;
   font-weight: 900;
-  font-style: italic;
-  text-transform: uppercase;
-  color: #facc15;
+  font-style: normal;
+  color: #fff3d4;
 }
 
 .eyebrow {
   margin: 0 0 4px;
-  color: #a5b4fc;
+  color: #b1c9ce;
   font-size: 0.75rem;
   text-transform: uppercase;
   font-weight: 700;
@@ -60,7 +59,7 @@ h1 {
 .hint {
   max-width: 420px;
   margin: 0;
-  color: #a5b4fc;
+  color: #b1c9ce;
   font-size: 0.875rem;
   text-align: right;
   font-weight: 700;
@@ -87,14 +86,14 @@ h1 {
   position: relative;
   width: min(960px, 100%);
   margin: 0 auto;
-  border: 4px solid rgba(255, 255, 255, 0.05);
-  border-radius: 3rem;
+  border: 4px solid #36565d;
+  border-radius: 20px;
   overflow: hidden;
-  background-color: rgba(49, 46, 129, 0.3);
+  background-color: #112732;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: none;
+  box-shadow: 0 24px 64px #0005;
   touch-action: none;
   overscroll-behavior: none;
   user-select: none;
@@ -107,7 +106,7 @@ canvas {
   height: auto;
   aspect-ratio: 16 / 9;
   image-rendering: auto;
-  border-radius: 2.8rem;
+  border-radius: 16px;
 }
 
 .mobile-controls {
@@ -121,12 +120,12 @@ canvas {
 .mobile-controls button {
   min-height: 64px;
   border: 0;
-  border-radius: 2.5rem;
+  border-radius: 16px;
   color: #fff;
   font-weight: 900;
   font-size: 1.25rem;
-  background-color: #ec4899;
-  box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
+  background-color: #284751;
+  box-shadow: inset 0 -4px 0 #0003;
   cursor: pointer;
   touch-action: none;
   transition: transform 0.15s, box-shadow 0.15s;
@@ -135,18 +134,18 @@ canvas {
 .mobile-controls .jump {
   background-color: #facc15;
   color: #312e81;
-  box-shadow: 0 0 40px rgba(250, 204, 21, 0.5);
+  box-shadow: inset 0 -4px 0 #0003;
 }
 
 .mobile-controls .crouch {
-  background-color: #7c3aed;
-  box-shadow: 0 0 20px rgba(124, 58, 237, 0.45);
+  background-color: #365b64;
+  box-shadow: inset 0 -4px 0 #0003;
 }
 
 .mobile-controls .fire {
   background-color: #f97316;
   color: #fff7ed;
-  box-shadow: 0 0 32px rgba(249, 115, 22, 0.5);
+  box-shadow: inset 0 -4px 0 #0003;
 }
 
 .mobile-controls button:active {
@@ -359,4 +358,44 @@ canvas {
   .game-wrap {
     width: min(100%, calc((100dvh - 158px) * 16 / 9 + 8px));
   }
+}
+
+/* The frame stays quiet so the world and controls carry the emphasis. */
+h1 span { display: block; font-size: .47em; letter-spacing: -.02em; margin-top: 8px; color: #c3ddd6; }
+.game-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 4px 10px; }
+.journey-label { color: #a7c7c5; font-size: 11px; letter-spacing: .16em; font-weight: 800; }
+.game-toolbar > div { display: flex; gap: 8px; }
+.game-toolbar button { min-height: 44px; min-width: 76px; border: 1px solid #49676d; border-radius: 10px; padding: 8px 12px; background: #1c3742; color: #f4f3df; font: 700 13px system-ui; cursor: pointer; }
+.game-toolbar button:disabled { opacity: .5; cursor: default; }
+.fullscreen-error { color: #ffe3a3; margin: 0 0 10px; font-size: 13px; text-align: center; }
+.game-toolbar button:hover:not(:disabled) { background: #305460; }
+.game-toolbar button:focus-visible, canvas:focus-visible { outline: 3px solid #facc75; outline-offset: 3px; }
+@media (pointer: coarse) and (max-width: 760px) and (orientation: portrait) {
+  .game-toolbar { margin: 0; }
+  .journey-label { display: none; }
+  .game-toolbar > div { margin-left: auto; }
+  .shell { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+}
+
+.shell:fullscreen {
+  width: 100%; height: 100dvh; max-width: none;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  background: #0a1b25; justify-content: center; gap: 8px; overflow: auto;
+}
+.shell:fullscreen .hero { display: none; }
+.shell:fullscreen .game-toolbar { width: 100%; max-width: 1200px; margin: 0 auto; flex: 0 0 auto; }
+.shell:fullscreen .game-wrap { width: min(100%, calc((100dvh - 84px) * 16 / 9 + 8px)); flex: 0 0 auto; }
+.shell:fullscreen .mobile-controls { margin: 0 auto; flex: 0 0 auto; }
+@media (pointer: coarse) {
+  .shell:fullscreen .game-wrap { width: min(100%, calc((100dvh - 162px) * 16 / 9 + 8px)); }
+}
+@media (pointer: coarse) and (max-width: 760px) {
+  .shell:fullscreen .game-wrap { width: min(100%, calc((100dvh - 238px) * 16 / 9 + 8px)); }
+}
+@media (orientation: landscape) and (max-height: 620px) {
+  .game-toolbar { margin: 0 auto; width: min(960px, 100%); }
+  .game-wrap { width: min(100%, calc((100dvh - 142px) * 16 / 9 + 8px)); }
+}
+@media (orientation: landscape) and (max-height: 620px) and (max-width: 760px) {
+  .game-wrap { width: min(100%, calc((100dvh - 210px) * 16 / 9 + 8px)); }
 }

@@ -39,6 +39,9 @@ import * as reducedMotion from "./reduced-motion.mjs";
 import * as subpath from "./subpath.mjs";
 import * as touchInput from "./touch-input.mjs";
 import * as traversal from "./traversal.mjs";
+import * as fairness from "./fairness.mjs";
+import * as finalBoss from "./final-boss.mjs";
+import * as fullscreen from "./fullscreen.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -93,9 +96,12 @@ try {
     want("audio") ||
     want("traverse") ||
     want("flash") ||
-    want("motion")
+    want("motion") || want("fairness") || want("final") || want("fullscreen")
   ) {
     const modules = [];
+    if (want("fullscreen")) modules.push(fullscreen);
+    if (want("fairness")) modules.push(fairness);
+    if (want("final")) modules.push(finalBoss);
     if (want("arena")) modules.push(arenaRunway);
     if (want("touch")) modules.push(touchInput);
     if (want("audio")) modules.push(audio);

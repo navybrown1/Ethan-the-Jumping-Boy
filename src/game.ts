@@ -50,7 +50,8 @@ export function initGame(
   btnRight: HTMLElement | null,
   btnCrouch: HTMLElement | null,
   btnJump: HTMLElement | null,
-  btnFire: HTMLElement | null
+  btnFire: HTMLElement | null,
+  controls: { pause?: HTMLButtonElement | null; sound?: HTMLButtonElement | null } = {}
 ) {
   const ctx = canvas.getContext("2d")!;
   // Logical resolution the whole game is authored in. The canvas bitmap is
@@ -187,10 +188,10 @@ export function initGame(
   let musicTempo = 125;
   let musicRoot = 1;
 
-  const reducedMotion =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let reducedMotion = motionQuery.matches;
+  const onMotionChange = () => { reducedMotion = motionQuery.matches; };
+  motionQuery.addEventListener("change", onMotionChange);
 
   const SETTINGS_KEY = "ethan-deluxe-settings-v1";
   function loadSettings(): { muted: boolean } {
@@ -477,7 +478,8 @@ export function initGame(
     // position in open air, so the step is a step again rather than a trap.
     add(520, 340, 170, 36, 2);
     add(760, 440, 64, 16, 4);
-    add(980, 340, 220, 36, 1);
+    // Keep a full jump of headroom over the gap at 1120..1220.
+    add(980, 240, 220, 36, 1);
     add(1300, 285, 200, 36, 2);
     add(1600, 340, 200, 36, 1, { move: { axis: "y", amp: 45, speed: 1.4, phase: 1 } });
     add(1900, 350, 200, 36, 2);
@@ -493,7 +495,8 @@ export function initGame(
     add(3100, 300, 220, 36, 2);
     add(3350, 340, 200, 36, 1, { move: { axis: "y", amp: 45, speed: 1.6 } });
     add(3760, 440, 64, 16, 4);
-    add(4100, 350, 200, 36, 2);
+    // Leave room to jump across the gap and onto the raised bank.
+    add(4100, 215, 200, 36, 2);
     add(4450, 300, 200, 36, 1);
     add(4750, 330, 220, 36, 2);
 
@@ -504,7 +507,7 @@ export function initGame(
     };
     addStars(310, 245, 3);
     addStars(530, 285, 3);
-    addStars(995, 285, 4);
+    addStars(995, 185, 4);
     addStars(1310, 230, 4);
     addStars(1610, 285, 3);
     addStars(1910, 295, 4);
@@ -515,7 +518,7 @@ export function initGame(
     addStars(2710, 275, 3);
     addStars(3110, 245, 4);
     addStars(3360, 285, 3);
-    addStars(4110, 295, 4);
+    addStars(4110, 160, 4);
     addStars(4460, 245, 3);
     addStars(4760, 275, 4);
 
@@ -674,7 +677,8 @@ export function initGame(
     add(1450, 280, 220, 36, 2);
     add(2050, 340, 160, 36, 1);
     add(2450, 320, 200, 36, 2);
-    add(2700, 300, 200, 36, 2, { move: { axis: "x", amp: 160, speed: 1.3, phase: 1, minX: 2520, maxX: 2900 } });
+    // The moving ceiling must not cut the jump across the lava below.
+    add(2700, 210, 200, 36, 2, { move: { axis: "x", amp: 160, speed: 1.3, phase: 1, minX: 2520, maxX: 2900 } });
     // These two used to be add(3200, 340, 180) and add(3300, 330, 140). They
     // intersected each other across x=3300..3380, and the first hung its
     // underside 80px above the floor at 456 exactly where the player has to
@@ -694,7 +698,8 @@ export function initGame(
     add(3500, 225, 140, 36, 1);
     add(3700, 190, 140, 36, 1);
     add(3900, 120, 140, 36, 1);
-    add(3600, 345, 200, 36, 2);
+    // Clear the take-off before the 3840..4060 lava gap.
+    add(3600, 245, 200, 36, 2);
     add(4100, 345, 200, 36, 1);
     add(4400, 280, 220, 36, 2);
     add(4700, 320, 200, 36, 1);
@@ -710,13 +715,13 @@ export function initGame(
     addStars(1460, 225, 4);
     addStars(2060, 285, 3);
     addStars(2460, 265, 4);
-    addStars(2710, 245, 3);
+    addStars(2710, 155, 3);
     // Was addStars(3210, 285, 4), which no longer lines up with the two
     // platforms it belongs to. Split rather than moved so the level keeps the
     // same number of stars, since the rating is a proportion of the total.
     addStars(3040, 285, 2);
     addStars(3310, 215, 2);
-    addStars(3610, 265, 3);
+    addStars(3610, 190, 3);
     addStars(3920, 75, 5);
     addStars(4110, 285, 4);
     addStars(4410, 225, 3);
@@ -789,7 +794,8 @@ export function initGame(
     add(4600, 456, 500);
 
     add(150, 345, 160, 36, 1);
-    add(400, 280, 180, 36, 2);
+    // Clear the take-off over the first storm-world gap.
+    add(400, 220, 180, 36, 2);
     add(1000, 345, 200, 36, 1);
     add(1350, 320, 200, 36, 2, { move: { axis: "x", amp: 140, speed: 1.5, minX: 1200, maxX: 1520 } });
     add(1900, 340, 200, 36, 1);
@@ -797,7 +803,8 @@ export function initGame(
     add(2650, 350, 180, 36, 1);
     add(2900, 300, 200, 36, 2, { move: { axis: "y", amp: 80, speed: 1.5, phase: 2 } });
     add(3400, 340, 180, 36, 1);
-    add(3700, 300, 220, 36, 2);
+    // A full jump must fit above the last wide lava crossing.
+    add(3700, 210, 220, 36, 2);
     add(4100, 345, 200, 36, 1);
     add(4400, 290, 220, 36, 2);
 
@@ -807,7 +814,7 @@ export function initGame(
       for (let i = 0; i < count; i++) stars.push({ x: x + i * gap, y, w: 34, h: 34, collected: false, bob: Math.random() * Math.PI * 2 });
     };
     addStars(160, 285, 3);
-    addStars(410, 225, 3);
+    addStars(410, 165, 3);
     addStars(1010, 285, 4);
     addStars(1360, 260, 3);
     addStars(1910, 285, 3);
@@ -815,7 +822,7 @@ export function initGame(
     addStars(2660, 290, 3);
     addStars(2910, 245, 4);
     addStars(3410, 285, 3);
-    addStars(3710, 245, 4);
+    addStars(3710, 155, 4);
     addStars(4110, 285, 3);
     addStars(4410, 235, 4);
 
@@ -890,22 +897,9 @@ export function initGame(
       name: "TEMPEST SOVEREIGN", key: "storm", color: "#8fb4ff",
       hp: 34, w: 132, h: 146, scale: 1.0, speed: 126, chargeSpeed: 430,
       stompChip: 2, stompStagger: 3, spireDamage: 6,
-      // 34, not the 24 it was briefly tuned to. HP is the only lever that sets
-      // fight length once the punish window is capped at three or four stomps
-      // by STAGGER_SHAKE: the harness measured a window yielding 4 stomps plus
-      // a spire bait, so 24 HP was exactly one window and the final boss died
-      // in 9 seconds. 34 needs three windows, and the measured kill now runs
-      // 18-22s against a bot with perfect reactions, which puts a human in the
-      // 30-45s range. Every previous raise here was made while the arena was
-      // silently fighting the player, which is why the fight felt unwinnable
-      // rather than long; that variable is gone now.
-      // The longest punish window, not the shortest. It used to be 1.9s and
-      // ramped DOWN with level, which is backwards: the final boss has the most
-      // HP, the fastest patrol, the most attacks and adds minions, so starving
-      // its punish window made it the only fight the no-powers route could not
-      // finish. Difficulty should come from the attacks, not from withholding
-      // the reward for surviving them.
-      staggerTime: 3.2,
+      // Give a player time to recognise the cue, close the gap and jump.
+      // Fireballs are optional; the lowered weak point is reachable from the floor.
+      staggerTime: 4.2,
       final: true
     }
   };
@@ -1038,6 +1032,7 @@ export function initGame(
   }
 
   function resetGame(startScene = "title") {
+    clearInputs();
     if (startScene === "title") {
       state.selectLevel = 1;
       state.checkpointLevel = 1;
@@ -1074,6 +1069,8 @@ export function initGame(
     state.player = {
       x: playerSpawn.x,
       y: playerSpawn.y,
+      safeX: playerSpawn.x,
+      safeY: playerSpawn.y,
       w: 44,
       h: 70,
       vx: 0,
@@ -1147,6 +1144,8 @@ export function initGame(
     const pl = state.player;
     pl.x = playerSpawn.x;
     pl.y = playerSpawn.y;
+    pl.safeX = playerSpawn.x;
+    pl.safeY = playerSpawn.y;
     pl.vx = 0;
     pl.vy = 0;
     pl.grounded = false;
@@ -1518,11 +1517,29 @@ export function initGame(
 
     if (pl.grounded) pl.coyote = COYOTE_TIME;
 
+    // Remember a stable, unobstructed foothold, never a moving or crumbling ledge.
+    const footing = pl.standingPlatform;
+    if (pl.grounded && footing && footing.type !== 3 && footing.type !== 4 &&
+        !footing.move && !footing.crumble && pl.x >= footing.x + 12 &&
+        pl.x + pl.w <= footing.x + footing.w - 12 &&
+        !state.platforms.some((q: any) => q !== footing && rectsOverlap(
+          { x: pl.x, y: footing.y - 70, w: pl.w, h: 69 }, q))) {
+      pl.safeX = pl.x;
+      pl.safeY = footing.y - 70;
+    }
+
     if (pl.y > WORLD_H) {
       hitPlayer({ x: pl.x - 50, y: pl.y, w: 20, h: 20 });
-      pl.x = Math.max(100, state.cameraX + 120);
-      pl.y = 160;
+      pl.x = pl.safeX;
+      pl.y = pl.safeY;
+      pl.h = 70;
+      pl.crouching = false;
+      pl.vx = 0;
       pl.vy = 0;
+      pl.invuln = Math.max(pl.invuln, 2);
+      state.cameraX = clamp(pl.x - VIEW_W * 0.35, 0, WORLD_W - VIEW_W);
+      state.targetCameraX = state.cameraX;
+      if (!pl.dead) addNotice("Back on solid ground", pl.x + pl.w / 2, pl.y - 18, "#b5f4da");
     }
 
     if (pl.invincible > 0 && !reducedMotion) {
@@ -1981,18 +1998,24 @@ export function initGame(
 
   function startBossDeath(b: any) {
     if (!b || b.dying > 0) return;
-    b.dying = 1.7;
+    b.deathDuration = 2.2;
+    b.dying = b.deathDuration;
     b.anim = 0;
     b.state = "dying";
     b.vx = 0;
     b.vy = 0;
     b.minions.forEach((m: any) => { m.alive = false; });
+    state.shockwaves = [];
+    state.strikes = [];
+    state.player.invuln = Math.max(state.player.invuln, b.deathDuration + 0.5);
     state.shake = 0.45;
     state.hitstop = 0.12;
     state.score += b.final ? 5000 : 1200 + b.level * 300;
     sfx.bossDie();
     if (!b.final) {
       state.banner = { title: `${b.name} DEFEATED!`, sub: "Portal unlocked · Boss bonus awarded", timer: 2.4 };
+    } else {
+      state.banner = { title: "THE STORM IS LIFTING", sub: "You did it, Ethan!", timer: b.deathDuration };
     }
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
@@ -2171,8 +2194,8 @@ export function initGame(
         musicTempo = b.final ? 165 : Math.max(musicTempo, 145);
         state.banner = {
           title: b.name,
-          sub: b.final ? `FINAL BOSS · ${b.maxHp} HP` : `WORLD ${b.level} BOSS · ${b.maxHp} HP`,
-          timer: 2.2
+          sub: "Dodge the attack. Jump on top when it kneels. No powers needed!",
+          timer: 3.2
         };
         state.shake = 0.24;
         // Clear the corridor behind the arena so the fight is the fight. The
@@ -2311,7 +2334,7 @@ export function initGame(
 
     // The hitbox shrinks while staggered. That is what turns the weak point
     // from "just above the player's jump apex" into a 56px landing window.
-    const targetH = b.hBase * (b.state === "stagger" ? STAGGER_HEIGHT : 1);
+    const targetH = b.hBase * (b.state === "stagger" ? (b.final ? 0.58 : STAGGER_HEIGHT) : 1);
     b.h += (targetH - b.h) * Math.min(1, dt * 9);
     if (b.state !== "attack" || b.attack !== "slam") b.y = b.groundY - b.h;
 
@@ -2326,7 +2349,7 @@ export function initGame(
       pl.vx = -Math.sign(b.x - pl.x || 1) * 260;
       return;
     }
-    if (pl.invuln > 0) return;
+    // Recovery protects Ethan from damage; it must not prevent him attacking.
 
     const staggered = b.state === "stagger";
     const window = staggered ? 56 : 34;
@@ -2381,7 +2404,7 @@ export function initGame(
     // 176px/s in its last phase, most contact was incidental rather than
     // earned. The exposed weak point is likewise free to touch, and
     // contactGrace covers the beat where it stands back up.
-    const harmless = staggered || b.contactGrace > 0 || b.state === "idle" || b.state === "intro";
+    const harmless = staggered || b.contactGrace > 0 || b.state === "idle" || b.state === "intro" || b.state === "telegraph";
     if (harmless) return;
     hitPlayer(b);
   }
@@ -2638,7 +2661,7 @@ export function initGame(
       if (p.crumble && p.cs === "gone") continue;
       let drawY = p.y;
       let alpha = 1;
-      if (p.crumble && p.cs === "shake") drawY = p.y + (Math.random() - 0.5) * 5;
+      if (p.crumble && p.cs === "shake" && !reducedMotion) drawY = p.y + (Math.random() - 0.5) * 5;
       if (p.crumble && p.cs === "fall") { drawY = p.y + p.fallY; alpha = 0.7; }
       if (p.crumble && p.cs === "idle" && p.respawn === 0 && p.fallY > 0) { alpha = 0.5; }
       ctx.globalAlpha = alpha;
@@ -2656,9 +2679,17 @@ export function initGame(
       }
       ctx.globalAlpha = 1;
 
+      // A continuous rim identifies the collision surface, unlike the tile texture.
+      ctx.fillStyle = p.type === 3 ? "#ffe2a0" : p.type === 2 ? "#dbf7ff" : "#c6eac0";
+      ctx.fillRect(p.x, drawY, p.w, 3);
       if (p.type === 3) {
-        const glow = 0.5 + Math.sin(frameTime * 6 + p.x) * 0.3;
-        ctx.fillStyle = `rgba(255,140,58,${glow})`;
+        // Static teeth communicate danger by shape as well as colour.
+        ctx.fillStyle = "#ffcf83";
+        for (let x = p.x + 8; x < p.x + p.w - 8; x += 24) {
+          ctx.beginPath(); ctx.moveTo(x, drawY + 12);
+          ctx.lineTo(x + 6, drawY + 4); ctx.lineTo(x + 12, drawY + 12); ctx.fill();
+        }
+        ctx.fillStyle = "rgba(255,140,58,0.65)";
         ctx.fillRect(p.x + 4, p.y + 2, p.w - 8, 6);
       } else if (p.crumble && (p.cs === "shake" || p.cs === "idle")) {
         ctx.fillStyle = "rgba(255,255,255,0.16)";
@@ -2753,7 +2784,7 @@ export function initGame(
   };
 
   function drawBossEntity(b: any) {
-    if (!b || !b.active) return;
+    if (!b || !b.active || b.deathDone || (!b.alive && b.dying <= 0)) return;
     const img = images[`boss_${b.key}`];
     if (!img) return;
     if (b.x + 240 < state.cameraX || b.x - 240 > state.cameraX + VIEW_W) return;
@@ -2761,31 +2792,58 @@ export function initGame(
     const row = BOSS_ROW[b.animState] ?? 0;
     const frames = BOSS_ROW_FRAMES[row] || 1;
     const fps = BOSS_ROW_FPS[row] || 10;
-    const frame = Math.floor(b.anim * fps) % frames;
+    const frame = b.dying > 0 ? Math.min(frames - 1, Math.floor(b.anim * fps)) : Math.floor(b.anim * fps) % frames;
     const s = b.scale;
+    const bodyScale = b.h / b.hBase;
+    const deathProgress = b.dying > 0 ? clamp(1 - b.dying / b.deathDuration, 0, 1) : 0;
     const dw = BOSS_CELL * s;
-    const dh = BOSS_CELL * s;
+    const dh = BOSS_CELL * s * bodyScale;
     const dx = b.x + b.w / 2 - dw / 2;
-    const dy = b.groundY - BOSS_FOOT_Y * s;
+    const dy = b.groundY - BOSS_FOOT_Y * s * bodyScale;
 
     // Ground telegraphs go under the boss so they never hide the silhouette.
     if (b.state === "telegraph") drawBossTelegraph(b);
 
     ctx.save();
-    if (b.hurt > 0 && Math.floor(frameTime * 26) % 2 === 0) ctx.globalAlpha = 0.62;
+    if (b.dying > 0) {
+      // One smooth disappearance, not flashing. Reduced motion uses fade only.
+      ctx.globalAlpha = Math.pow(1 - deathProgress, 2);
+      if (!reducedMotion) {
+        const cx = b.x + b.w / 2;
+        ctx.translate(cx, b.groundY - deathProgress * 70);
+        ctx.scale(1 - deathProgress * 0.7, 1 - deathProgress * 0.7);
+        ctx.translate(-cx, -b.groundY);
+      }
+    } else if (b.hurt > 0) ctx.globalAlpha = 0.7;
     ctx.drawImage(img, frame * BOSS_CELL, row * BOSS_CELL, BOSS_CELL, BOSS_CELL, dx, dy, dw, dh);
     ctx.restore();
+    if (b.dying > 0 && !reducedMotion) {
+      ctx.save();
+      ctx.globalAlpha = (1 - deathProgress) * 0.7;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 4 * (1 - deathProgress);
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.groundY - b.hBase / 2, 30 + deathProgress * 110, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Weak-point ring: the visual contract for "hit me now".
     if (b.state === "stagger") {
-      const pulse = 0.5 + 0.5 * Math.sin(frameTime * 12);
       ctx.save();
-      ctx.globalAlpha = 0.3 + 0.34 * pulse;
+      ctx.globalAlpha = 0.9;
       ctx.strokeStyle = "#fff2a9";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.ellipse(b.x + b.w / 2, b.y + b.h * 0.44, b.w * 0.46, b.h * 0.36, 0, 0, Math.PI * 2);
+      ctx.ellipse(b.x + b.w / 2, b.y + 8, b.w * 0.34, 10, 0, 0, Math.PI * 2);
       ctx.stroke();
+      const cx = b.x + b.w / 2;
+      ctx.beginPath(); ctx.moveTo(cx - 9, b.y - 22);
+      ctx.lineTo(cx, b.y - 12); ctx.lineTo(cx + 9, b.y - 22); ctx.stroke();
+      ctx.fillStyle = "#122e38";
+      ctx.fillRect(cx - 36, b.groundY + 8, 72, 6);
+      ctx.fillStyle = "#f6d58a";
+      ctx.fillRect(cx - 36, b.groundY + 8, 72 * clamp(b.stagger / b.staggerTime, 0, 1), 6);
       ctx.restore();
     }
 
@@ -3208,7 +3266,7 @@ export function initGame(
     // 0.36 alpha left HUD text at ~3.0:1 against the world-1 sky and the cyan
     // sound label at ~1.2:1. 0.66 measures >=5.5:1 for every colour used here,
     // clearing WCAG AA (4.5:1) for text at these sizes.
-    const PANEL = "rgba(35,24,64,0.66)";
+    const PANEL = "rgba(9,28,38,0.9)";
     const pl = state.player;
     const hearts = Math.max(3, state.lives);
     const progress = clamp(state.cameraX / (WORLD_W - VIEW_W), 0, 1);
@@ -3369,7 +3427,7 @@ export function initGame(
       let status = "";
       let statusColor = "#fff2a9";
       if (bar.state === "stagger") {
-        status = "WEAK POINT OPEN";
+        status = "JUMP ON TOP!";
         statusColor = "#7dff6b";
       } else if (bar.state === "telegraph") {
         status = "INCOMING";
@@ -3480,8 +3538,9 @@ export function initGame(
         ctx.fillText("Paused", cx, y);
         y += 42 * u;
         ctx.fillStyle = "#fff";
-        fitFont("Press P or Esc to keep playing", 700, 19 * u, VIEW_W - 80);
-        ctx.fillText("Press P or Esc to keep playing", cx, y);
+        const resumeHint = coarsePointer ? "Tap the game to keep playing" : "Press P, Esc or click the game to resume";
+        fitFont(resumeHint, 700, 19 * u, VIEW_W - 80);
+        ctx.fillText(resumeHint, cx, y);
         y += 36 * u;
         ctx.fillStyle = "#9df5ff";
         fitFont("Move: A/D or arrows · Jump: Space · Fire: F · Sound: M", 800, 16 * u, VIEW_W - 60);
@@ -3495,7 +3554,10 @@ export function initGame(
       return;
     }
     ctx.save();
-    ctx.fillStyle = "rgba(18, 9, 42, 0.66)";
+    const menuSky = ctx.createLinearGradient(0, 0, VIEW_W, VIEW_H);
+    menuSky.addColorStop(0, "#102d3c");
+    menuSky.addColorStop(1, "#1e494a");
+    ctx.fillStyle = menuSky;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ctx.textAlign = "center";
 
@@ -3507,7 +3569,7 @@ export function initGame(
       // already reflows the cards into a 2x2 grid, so it keeps the default.
       titleText(
         "Ethan the Jumping Boy",
-        "Four worlds of platforming, collect stars, stomp enemies, beat the King Roller.",
+        "Collect the stars. Find your courage. Outsmart four world guardians.",
         // Naming keys a touch player does not have is the fastest way to make a
         // game feel broken. The cards are tappable (onCanvasPointerDown), so say
         // so instead.
@@ -3538,7 +3600,7 @@ export function initGame(
     } else if (scene === "win") {
       titleText(
         "You Win!",
-        `The King Roller has been defeated! Final Score: ${state.score}`,
+        `The storm is gone. All four worlds are safe! Score: ${state.score}`,
         coarsePointer ? "Tap Jump to play again" : "Press Enter to play again"
       );
       ctx.fillStyle = "#ffd76a";
@@ -3607,21 +3669,37 @@ export function initGame(
       const isUnlocked = card.level <= unlocked;
       const isSelected = state.selectLevel === card.level;
 
-      ctx.fillStyle = isSelected ? "rgba(157,245,255,0.28)" : "rgba(255,255,255,0.08)";
+      const worldColors = ["#83d9ad", "#f6b580", "#a9c5ff", "#dbc0fa"];
+      ctx.fillStyle = isSelected ? "#305653" : "#19343f";
       roundRect(ctx, cx - cw / 2, cy, cw, ch, 18);
       ctx.fill();
       ctx.lineWidth = isSelected ? 3 : 1;
-      ctx.strokeStyle = isSelected ? "#9df5ff" : "rgba(255,255,255,0.18)";
+      ctx.strokeStyle = isSelected ? "#f6d58a" : "#57747c";
       roundRect(ctx, cx - cw / 2, cy, cw, ch, 18);
       ctx.stroke();
 
+      // Small landscape vignettes give every world a recognisable silhouette.
+      ctx.save();
+      roundRect(ctx, card.x + 5, cy + 5, cw - 10, ch * 0.4, 12);
+      ctx.clip();
+      ctx.fillStyle = worldColors[i];
+      ctx.globalAlpha = isUnlocked ? 0.85 : 0.45;
+      ctx.fillRect(card.x + 5, cy + 5, cw - 10, ch * 0.4);
+      ctx.fillStyle = "#fff3cd";
+      ctx.beginPath(); ctx.arc(cx + cw * 0.25, cy + 18, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#244c58";
+      ctx.beginPath(); ctx.moveTo(card.x, cy + ch * 0.45);
+      for (let j = 0; j <= 4; j++) ctx.lineTo(card.x + j * cw / 4, cy + 18 + ((j + i) % 2) * 25);
+      ctx.lineTo(card.x + cw, cy + ch * 0.45); ctx.closePath(); ctx.fill();
+      ctx.restore();
+
       ctx.textAlign = "center";
       ctx.fillStyle = isUnlocked ? "#fff2a9" : "rgba(255,255,255,0.5)";
-      fitFont(`L${i + 1}`, 900, fLevel, cw - 16);
-      ctx.fillText(`L${i + 1}`, cx, cy + ch * 0.34);
+      fitFont(`${i + 1}`, 900, fLevel, cw - 16);
+      ctx.fillText(`${i + 1}`, cx, cy + ch * 0.31);
       ctx.fillStyle = isUnlocked ? "#fff" : "rgba(255,255,255,0.5)";
       fitFont(names[i], 700, fName, cw - 16);
-      ctx.fillText(names[i], cx, cy + ch * 0.58);
+      ctx.fillText(names[i], cx, cy + ch * 0.65);
       const s = isUnlocked ? prog.stars[i] || 0 : 0;
       if (isUnlocked) {
         ctx.fillStyle = "#ffd76a";
@@ -3652,10 +3730,10 @@ export function initGame(
     const bx = (VIEW_W - bw) / 2;
     const by = (VIEW_H - bh) / 2;
 
-    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fillStyle = "#112d38";
     roundRect(ctx, bx, by, bw, bh, 34);
     ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.strokeStyle = "#4c6a6b";
     ctx.lineWidth = 2;
     roundRect(ctx, bx, by, bw, bh, 34);
     ctx.stroke();
@@ -3735,6 +3813,11 @@ export function initGame(
     // Never swallow browser shortcuts. Without this guard Ctrl/Cmd+R, +F, +P,
     // +A, +S and friends are all eaten because e.key is still "r", "f", etc.
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target instanceof HTMLElement) {
+      if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // Preserve native button activation without trapping movement or pause keys.
+      if (e.target.closest('button') && (e.key === "Enter" || e.key === " ")) return;
+    }
     initAudio();
     const k = e.key.toLowerCase();
     if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "f", "j", "r", "enter", "p", "m", "escape"].includes(k)) e.preventDefault();
@@ -3745,7 +3828,7 @@ export function initGame(
       return;
     }
     if ((k === "p" || k === "escape") && scene === "playing" && state.player && !state.player.dead) {
-      if (!repeat) state.paused = !state.paused;
+      if (!repeat) togglePause();
       keys.jumpPressed = false;
       return;
     }
@@ -3824,6 +3907,36 @@ export function initGame(
   let rafId: number;
   let running = true;
 
+  function clearInputs() {
+    for (const key of Object.keys(keys) as (keyof typeof keys)[]) keys[key] = false;
+    for (const key of Object.keys(mobileState) as (keyof typeof mobileState)[]) mobileState[key] = false;
+  }
+
+  function togglePause() {
+    if (scene !== "playing" || state.player.dead) return;
+    clearInputs();
+    state.paused = !state.paused;
+  }
+  const onSoundClick = () => { initAudio(); toggleMute(); };
+  controls.pause?.addEventListener("click", togglePause);
+  controls.sound?.addEventListener("click", onSoundClick);
+  let controlSnapshot = "";
+
+  function syncControls() {
+    const snapshot = `${scene}:${state.paused}:${settings.muted}:${state.player?.dead}`;
+    if (snapshot === controlSnapshot) return;
+    controlSnapshot = snapshot;
+    if (controls.pause) {
+      controls.pause.disabled = scene !== "playing" || !!state.player?.dead;
+      controls.pause.textContent = state.paused ? "Resume" : "Pause";
+      controls.pause.setAttribute("aria-pressed", String(state.paused));
+    }
+    if (controls.sound) {
+      controls.sound.textContent = settings.muted ? "Sound off" : "Sound on";
+      controls.sound.setAttribute("aria-pressed", String(!settings.muted));
+    }
+  }
+
   function loop(now: number) {
     if (!running) return;
     const dt = Math.min(0.033, (now - last) / 1000 || 0);
@@ -3831,6 +3944,7 @@ export function initGame(
     syncMobile();
     update(dt);
     draw();
+    syncControls();
     rafId = requestAnimationFrame(loop);
   }
 
@@ -3843,6 +3957,8 @@ export function initGame(
   // back to world units is a straight scale, not a devicePixelRatio conversion:
   // the DPR only affects the backing store, which this never touches.
   function onCanvasPointerDown(e: PointerEvent) {
+    canvas.focus({ preventScroll: true });
+    if (scene === "playing" && state.paused) { togglePause(); return; }
     if (scene !== "title") return;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -3873,6 +3989,7 @@ export function initGame(
   // early return plus a state comparison, so this costs nothing per tap.
   window.addEventListener("pointerdown", onPointerDownAudio);
   const autoPause = () => {
+    clearInputs();
     if (scene === "playing" && !state.paused && state.player && !state.player.dead) state.paused = true;
   };
   window.addEventListener("blur", autoPause);
@@ -3897,6 +4014,7 @@ export function initGame(
 
   Promise.all(Object.entries(assetList).map(([name, src]) => loadImage(name, src)))
     .then(entries => {
+      if (!running) return;
       for (const [name, img] of entries) images[name] = img;
       applyCanvasScale();
       resetGame("title");
@@ -3904,6 +4022,7 @@ export function initGame(
       rafId = requestAnimationFrame(loop);
     })
     .catch(err => {
+      if (!running) return;
       console.error(err);
       scene = "loading";
       applyCanvasScale();
@@ -4054,6 +4173,9 @@ export function initGame(
   }
 
   return () => {
+    motionQuery.removeEventListener("change", onMotionChange);
+    controls.pause?.removeEventListener("click", togglePause);
+    controls.sound?.removeEventListener("click", onSoundClick);
     running = false;
     cancelAnimationFrame(rafId);
     window.removeEventListener("keydown", handleKeyDown);

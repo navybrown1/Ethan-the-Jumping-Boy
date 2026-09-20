@@ -19,8 +19,8 @@
 // ground ahead, when a wall stops forward motion, or when it has stalled. It is
 // not trying to play well. It is trying to answer "is there a way through".
 //
-// Falling is not a failure. The game respawns a fallen player near where they
-// fell and, while invincible, takes no heart for it. Falls are counted and
+// Falling is not a failure in this geometry probe. Recovery returns to the
+// last stable foothold and, while invincible, takes no heart for it. Falls are counted and
 // reported because a level that only completes after twenty falls is telling
 // you something even when it technically passes.
 
@@ -101,8 +101,8 @@ const installDriver = ({ budgetMs, stallMs }) => {
   // jump at every moving platform that happened to be at the wrong phase.
   function groundAt(x, feetY) {
     for (const p of E.state.platforms) {
-      if (p.cs === "gone") continue;
-      const top = p.y + (p.dy || 0);
+      if (p.type === 3 || (p.crumble && p.cs !== "idle" && p.cs !== "shake")) continue;
+      const top = p.y;
       if (x >= p.x - 2 && x <= p.x + p.w + 2 && top >= feetY - 24 && top <= feetY + 170) return true;
     }
     return false;
@@ -115,8 +115,8 @@ const installDriver = ({ budgetMs, stallMs }) => {
     out.ticks++;
     out.maxX = Math.max(out.maxX, pl.x);
 
-    // A respawn from a pit drops the player back to y=160 near where they fell.
-    if (prevY > 600 && pl.y <= 200) out.falls++;
+    // Recovery returns to the last safe foothold, which may be above any floor.
+    if (prevY > 600 && pl.y < prevY - 150) out.falls++;
     prevY = pl.y;
 
     if (E.scene !== "playing" || pl.dead) {
@@ -245,6 +245,12 @@ async function traverse(page, level, results) {
   if (ok && !atKnown) {
     results.check(`L${level}: no stall on the way`, true, `${secs}s, ${out.jumps} jumps, ${out.falls} falls`);
   } else if (!ok) {
+    const diagnostic = await page.evaluate(() => {
+      const s = window.__ethan.state, p = s.player;
+      return { paused: s.paused, x: p.x, y: p.y, vx: p.vx, vy: p.vy, grounded: p.grounded,
+        nearby: s.platforms.filter(q => q.x < p.x + 160 && q.x + q.w > p.x - 80).map(q => ({x:q.x,y:q.y,w:q.w,h:q.h,type:q.type})) };
+    });
+    results.note(`stall state: ${JSON.stringify(diagnostic)}`);
     results.note(
       `L${level}: ${out.jumps} jumps, ${out.falls} falls before stopping at x=${Math.round(out.maxX)}`
     );

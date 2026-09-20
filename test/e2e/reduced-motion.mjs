@@ -1,7 +1,7 @@
 // Reduced motion, verified as a difference rather than as a branch.
 //
-// The game reads `(prefers-reduced-motion: reduce)` once at init and uses it in
-// four places. Reading the source proves the branches exist; it does not prove
+// The game reads `(prefers-reduced-motion: reduce)` at init and on change.
+// Reading the source proves the branches exist; it does not prove
 // they change anything. So this runs the same scenario twice, once with the
 // setting on and once with it off, and asserts the two runs differ. A check
 // that only looked at the reduced-motion run would pass on a game that ignored

@@ -183,9 +183,8 @@ export async function openGame(browser, url, opts = {}) {
     ...(hasTouch ? { hasTouch: true } : {}),
     ...(isMobile ? { isMobile: true } : {}),
     ...(deviceScaleFactor ? { deviceScaleFactor } : {}),
-    // Set on the page rather than by calling emulateMedia afterwards, because
-    // the game reads matchMedia once at init. Emulating after load would change
-    // what the page reports without changing what the game already decided.
+    // Set the initial preference before boot; live preference changes are
+    // covered separately in fairness.mjs.
     ...(reducedMotion ? { reducedMotion } : {}),
   });
   const errors = [];

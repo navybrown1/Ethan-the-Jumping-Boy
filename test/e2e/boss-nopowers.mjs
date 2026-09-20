@@ -37,6 +37,8 @@ import path from "node:path";
 const LEVELS = (process.env.LEVELS || "1,2,3,4").split(",").map(Number);
 const RUN_MS = Number(process.env.RUN_MS || 90000);
 const JUMP_HOLD = 380; // full ascent; a shorter hold triggers the variable-jump cut
+// Optional slower decision cadence to test reaction margin, not just a fast bot.
+const REACTION_MS = Number(process.env.BOSS_REACTION_MS || 26);
 
 // The bounce cycle after a stomp is ~580ms. Anything much under that means
 // damage landed on consecutive frames, which is the multi-frame stomp bug.
@@ -286,7 +288,7 @@ async function runLevel(page, level, arena, outDir, results) {
       await keys.set("jump", true);
     }
 
-    await sleep(26);
+    await sleep(REACTION_MS);
   }
 
   await keys.releaseAll();
